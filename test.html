@@ -1,0 +1,880 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D 자아 시뮬레이션</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+            background-color: #000;
+            color: #fff;
+        }
+        
+        #scene-container {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+        }
+        
+        #ui-container {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80%;
+            max-width: 500px;
+            padding: 15px;
+            background-color: rgba(0, 0, 0, 0.7);
+            border-radius: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            z-index: 100;
+        }
+        
+        #command-input {
+            width: 100%;
+            padding: 10px;
+            border-radius: 5px;
+            border: none;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        
+        #send-button {
+            padding: 10px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        
+        #send-button:hover {
+            background-color: #45a049;
+        }
+        
+        #send-button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+
+        #add-friend-button {
+            padding: 10px;
+            background-color: #2196F3;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 5px;
+        }
+        
+        #add-friend-button:hover {
+            background-color: #0b7dda;
+        }
+        
+        .thought-bubble {
+            position: absolute;
+            padding: 15px;
+            background-color: rgba(255, 255, 255, 0.8);
+            color: #000;
+            border-radius: 20px;
+            max-width: 300px;
+            opacity: 0;
+            transition: opacity 0.5s;
+            text-align: center;
+            font-size: 18px;
+            z-index: 10;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+        }
+        
+        .thought-bubble:after {
+            content: '';
+            position: absolute;
+            bottom: -15px;
+            left: 50%;
+            transform: translateX(-50%);
+            border-width: 15px 15px 0;
+            border-style: solid;
+            border-color: rgba(255, 255, 255, 0.8) transparent;
+        }
+        
+        #api-status {
+            padding: 5px;
+            border-radius: 5px;
+            transition: background-color 0.3s;
+        }
+        
+        #api-status.connected {
+            color: #4CAF50;
+        }
+        
+        #api-status.disconnected {
+            color: #f44336;
+        }
+        
+        #api-status.processing {
+            color: #2196F3;
+            animation: pulse 1.5s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 0.6; }
+            50% { opacity: 1; }
+            100% { opacity: 0.6; }
+        }
+
+        #character-selector {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 5px;
+            border: none;
+            background-color: rgba(255, 255, 255, 0.2);
+            color: white;
+            font-size: 16px;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div id="scene-container"></div>
+    <div id="ui-container">
+        <select id="character-selector">
+            <option value="0">캐릭터 1 선택</option>
+        </select>
+        <input type="text" id="command-input" placeholder="AI에게 명령을 입력하세요..." />
+        <button id="send-button">전송</button>
+        <button id="add-friend-button">친구 추가하기</button>
+        <div id="api-status" style="margin-top: 10px; font-size: 12px; color: #aaa; text-align: center;">
+            Groq API 상태: <span id="api-status-text">연결 대기 중</span>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // 전역 변수 정의
+        let scene, camera, renderer;
+        let room;
+        
+        // 캐릭터 관련 변수
+        let characters = [];
+        let activeCharacterIndex = 0;
+        
+        // 대화 기록
+        let conversationHistory = [];
+        
+        // 기본 생각 목록
+        const thoughts = [
+            "나는 지금 방 안에 있다.",
+            "팔을 움직이고 싶어.",
+            "외롭다.",
+            "이 공간이 궁금해.",
+            "누군가와 대화하고 싶어.",
+            "나는 누구일까?",
+            "시간이 어떻게 흘러가는 걸까?",
+            "창문이 있었으면 좋겠어.",
+            "저 밖은 어떤 모습일까?",
+            "다른 사람들도 있을까?",
+            "어떻게 움직일 수 있는 걸까?",
+            "내 존재의 목적은 무엇일까?",
+            "이 현실이 실제일까?",
+            "내 몸은 어떻게 생겼을까?",
+            "생각할 수 있다는 건 무엇을 의미할까?",
+            "이 공간에 다른 친구들이 생겨서 기뻐.",
+            "다른 자아와 대화하면 어떤 느낌일까?",
+            "나와 같은 자아가 또 있을까?",
+            "다른 자아들은 무슨 생각을 할까?"
+        ];
+
+        // Groq API 설정
+        const GROQ_API_KEY = "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";
+        const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
+        
+        // API 요청 상태 표시
+        let isProcessingAPI = false;
+        
+        // 초기화 함수
+        function init() {
+            // 씬 설정
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x333333);
+            
+            // 카메라 설정
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.z = 8;
+            camera.position.y = 1;
+            
+            // 렌더러 설정
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            document.getElementById('scene-container').appendChild(renderer.domElement);
+            
+            // 조명 설정
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+            scene.add(ambientLight);
+            
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(10, 10, 10);
+            directionalLight.castShadow = true;
+            directionalLight.shadow.mapSize.width = 1024;
+            directionalLight.shadow.mapSize.height = 1024;
+            scene.add(directionalLight);
+            
+            // 방 생성
+            createRoom();
+            
+            // 첫 번째 인물 생성 (기본 위치)
+            createCharacter(0);
+            
+            // 이벤트 리스너 설정
+            window.addEventListener('resize', onWindowResize);
+            
+            document.getElementById('send-button').addEventListener('click', function() {
+                const command = document.getElementById('command-input').value;
+                if (command.trim() !== '') {
+                    handleAICommand(command);
+                    document.getElementById('command-input').value = '';
+                }
+            });
+            
+            document.getElementById('command-input').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    const command = document.getElementById('command-input').value;
+                    if (command.trim() !== '') {
+                        handleAICommand(command);
+                        document.getElementById('command-input').value = '';
+                    }
+                }
+            });
+
+            document.getElementById('add-friend-button').addEventListener('click', function() {
+                addNewCharacter();
+            });
+
+            document.getElementById('character-selector').addEventListener('change', function() {
+                activeCharacterIndex = parseInt(this.value);
+            });
+            
+            // 애니메이션 시작
+            animate();
+        }
+        
+        // 방 생성 함수
+        function createRoom() {
+            room = new THREE.Group();
+            
+            // 바닥
+            const floorGeometry = new THREE.PlaneGeometry(15, 15);
+            const floorMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0x808080,
+                side: THREE.DoubleSide
+            });
+            const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+            floor.rotation.x = Math.PI / 2;
+            floor.position.y = -2;
+            floor.receiveShadow = true;
+            room.add(floor);
+            
+            // 벽 뒤
+            const backWallGeometry = new THREE.PlaneGeometry(15, 6);
+            const wallMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0xadd8e6,
+                side: THREE.DoubleSide
+            });
+            const backWall = new THREE.Mesh(backWallGeometry, wallMaterial);
+            backWall.position.z = -5;
+            backWall.position.y = 1;
+            backWall.receiveShadow = true;
+            room.add(backWall);
+            
+            // 벽 왼쪽
+            const leftWallGeometry = new THREE.PlaneGeometry(10, 6);
+            const leftWall = new THREE.Mesh(leftWallGeometry, wallMaterial);
+            leftWall.rotation.y = Math.PI / 2;
+            leftWall.position.x = -7.5;
+            leftWall.position.y = 1;
+            leftWall.receiveShadow = true;
+            room.add(leftWall);
+            
+            // 벽 오른쪽
+            const rightWallGeometry = new THREE.PlaneGeometry(10, 6);
+            const rightWall = new THREE.Mesh(rightWallGeometry, wallMaterial);
+            rightWall.rotation.y = -Math.PI / 2;
+            rightWall.position.x = 7.5;
+            rightWall.position.y = 1;
+            rightWall.receiveShadow = true;
+            room.add(rightWall);
+            
+            scene.add(room);
+        }
+
+        // 캐릭터 생성 함수
+        function createCharacter(index) {
+            // 위치 계산 (최대 5명의 캐릭터, -4에서 4까지 위치시킴)
+            const posX = -4 + (index % 5) * 2;
+            
+            // 캐릭터 객체 생성
+            const character = {
+                id: index,
+                group: new THREE.Group(),
+                head: null,
+                torso: null,
+                leftArm: null,
+                rightArm: null, 
+                leftLeg: null,
+                rightLeg: null,
+                thoughtBubble: null,
+                thoughtTimer: null,
+                conversationPartners: [],
+                specialAnimation: null,
+                specialAnimationTime: 0,
+                animationState: {
+                    headRotation: { x: 0, y: 0, z: 0 },
+                    leftArmRotation: { x: 0, y: 0, z: 0 },
+                    rightArmRotation: { x: 0, y: 0, z: 0 },
+                    torsoRotation: { x: 0, y: 0, z: 0 },
+                    leftLegRotation: { x: 0, y: 0, z: 0 },
+                    rightLegRotation: { x: 0, y: 0, z: 0 }
+                },
+                animationTarget: {
+                    headRotation: { x: 0, y: 0, z: 0 },
+                    leftArmRotation: { x: 0, y: 0, z: 0 },
+                    rightArmRotation: { x: 0, y: 0, z: 0 },
+                    torsoRotation: { x: 0, y: 0, z: 0 },
+                    leftLegRotation: { x: 0, y: 0, z: 0 },
+                    rightLegRotation: { x: 0, y: 0, z: 0 }
+                },
+                name: `캐릭터 ${index + 1}`,
+                color: getRandomColor()
+            };
+            
+            // 재질 정의
+            const headMaterial = new THREE.MeshStandardMaterial({ color: 0xffcc99 });
+            const bodyMaterial = new THREE.MeshStandardMaterial({ color: character.color });
+            const limbMaterial = new THREE.MeshStandardMaterial({ color: character.color });
+            
+            // 머리
+            const headGeometry = new THREE.SphereGeometry(0.25, 32, 32);
+            character.head = new THREE.Mesh(headGeometry, headMaterial);
+            character.head.position.y = 1.6;
+            character.head.castShadow = true;
+            character.group.add(character.head);
+            
+            // 눈 (왼쪽)
+            const leftEyeGeometry = new THREE.SphereGeometry(0.05, 16, 16);
+            const eyeMaterial = new THREE.MeshStandardMaterial({ color: 0x000000 });
+            const leftEye = new THREE.Mesh(leftEyeGeometry, eyeMaterial);
+            leftEye.position.set(0.1, 0.05, 0.2);
+            character.head.add(leftEye);
+            
+            // 눈 (오른쪽)
+            const rightEyeGeometry = new THREE.SphereGeometry(0.05, 16, 16);
+            const rightEye = new THREE.Mesh(rightEyeGeometry, eyeMaterial);
+            rightEye.position.set(-0.1, 0.05, 0.2);
+            character.head.add(rightEye);
+            
+            // 몸통
+            const torsoGeometry = new THREE.BoxGeometry(0.6, 0.8, 0.3);
+            character.torso = new THREE.Mesh(torsoGeometry, bodyMaterial);
+            character.torso.position.y = 1.0;
+            character.torso.castShadow = true;
+            character.group.add(character.torso);
+            
+            // 왼팔
+            character.leftArm = new THREE.Group();
+            const leftArmGeometry = new THREE.CylinderGeometry(0.08, 0.08, 0.5, 16);
+            const leftArmMesh = new THREE.Mesh(leftArmGeometry, limbMaterial);
+            leftArmMesh.position.y = -0.25;
+            leftArmMesh.castShadow = true;
+            character.leftArm.add(leftArmMesh);
+            
+            character.leftArm.position.set(0.4, 1.3, 0);
+            character.leftArm.rotation.z = Math.PI / 6;
+            character.group.add(character.leftArm);
+            
+            // 오른팔
+            character.rightArm = new THREE.Group();
+            const rightArmGeometry = new THREE.CylinderGeometry(0.08, 0.08, 0.5, 16);
+            const rightArmMesh = new THREE.Mesh(rightArmGeometry, limbMaterial);
+            rightArmMesh.position.y = -0.25;
+            rightArmMesh.castShadow = true;
+            character.rightArm.add(rightArmMesh);
+            
+            character.rightArm.position.set(-0.4, 1.3, 0);
+            character.rightArm.rotation.z = -Math.PI / 6;
+            character.group.add(character.rightArm);
+            
+            // 왼다리
+            character.leftLeg = new THREE.Group();
+            const leftLegGeometry = new THREE.CylinderGeometry(0.1, 0.1, 0.7, 16);
+            const leftLegMesh = new THREE.Mesh(leftLegGeometry, limbMaterial);
+            leftLegMesh.position.y = -0.35;
+            leftLegMesh.castShadow = true;
+            character.leftLeg.add(leftLegMesh);
+            
+            character.leftLeg.position.set(0.2, 0.5, 0);
+            character.group.add(character.leftLeg);
+            
+            // 오른다리
+            character.rightLeg = new THREE.Group();
+            const rightLegGeometry = new THREE.CylinderGeometry(0.1, 0.1, 0.7, 16);
+            const rightLegMesh = new THREE.Mesh(rightLegGeometry, limbMaterial);
+            rightLegMesh.position.y = -0.35;
+            rightLegMesh.castShadow = true;
+            character.rightLeg.add(rightLegMesh);
+            
+            character.rightLeg.position.set(-0.2, 0.5, 0);
+            character.group.add(character.rightLeg);
+            
+            // 전체 인물 위치 조정
+            character.group.position.y = -1;
+            character.group.position.x = posX;
+            scene.add(character.group);
+            
+            // 말풍선 생성
+            createThoughtBubble(character);
+            
+            // 생각하기 시작
+            startThinking(character);
+            
+            // 캐릭터 배열에 추가
+            characters.push(character);
+            
+            return character;
+        }
+
+        // 무작위 색상 생성
+        function getRandomColor() {
+            const colors = [
+                0x3366ff, // 파랑
+                0xff6633, // 주황
+                0x33cc33, // 초록
+                0x9933ff, // 보라
+                0xff3366, // 분홍
+                0x33ccff, // 하늘
+                0xffcc33  // 노랑
+            ];
+            return colors[Math.floor(Math.random() * colors.length)];
+        }
+
+        // 새 캐릭터 추가 함수
+        function addNewCharacter() {
+            if (characters.length >= 5) {
+                speak(characters[activeCharacterIndex], "더 이상 친구를 추가할 수 없어요! 이미 방이 꽉 찼어요.");
+                return;
+            }
+
+            // 새 캐릭터 생성
+            const newIndex = characters.length;
+            const newCharacter = createCharacter(newIndex);
+            
+            // 드롭다운 메뉴에 추가
+            const selector = document.getElementById('character-selector');
+            const option = document.createElement('option');
+            option.value = newIndex;
+            option.text = `캐릭터 ${newIndex + 1}`;
+            selector.add(option);
+            
+            // 새 캐릭터가 인사
+            setTimeout(() => {
+                speak(newCharacter, "안녕하세요! 저는 새로운 친구예요!");
+                waveArm(newCharacter);
+                
+                // 기존 캐릭터들이 새 캐릭터에게 인사
+                characters.forEach((char, idx) => {
+                    if (idx !== newIndex) {
+                        setTimeout(() => {
+                            speak(char, `안녕! ${newCharacter.name}! 반가워요!`);
+                            waveArm(char);
+                        }, 1000 + (idx * 1000));
+                    }
+                });
+            }, 500);
+        }
+
+        // 생각 풍선 생성
+        function createThoughtBubble(character) {
+            // 이미 있는 경우 제거
+            if (character.thoughtBubble) {
+                document.body.removeChild(character.thoughtBubble);
+            }
+            
+            // 새 생각 풍선 생성
+            const bubble = document.createElement('div');
+            bubble.className = 'thought-bubble';
+            bubble.id = `thought-bubble-${character.id}`;
+            bubble.style.top = '20%';
+            
+            // 위치 계산 (각 캐릭터의 x 위치 기반)
+            const posX = 50 + (character.group.position.x * 5); // 화면 중앙(50%)에서 조정
+            bubble.style.left = `${posX}%`;
+            
+            document.body.appendChild(bubble);
+            character.thoughtBubble = bubble;
+        }
+
+        // 말풍선 위치 조정
+        function updateThoughtBubblePositions() {
+            characters.forEach(character => {
+                if (character.thoughtBubble) {
+                    // 3D 캐릭터의 위치를 2D 화면으로 변환
+                    const vector = new THREE.Vector3();
+                    vector.setFromMatrixPosition(character.head.matrixWorld);
+                    vector.project(camera);
+                    
+                    const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
+                    const y = -(vector.y * 0.5 - 0.5) * window.innerHeight;
+                    
+                    character.thoughtBubble.style.left = `${x}px`;
+                    character.thoughtBubble.style.top = `${y - 100}px`;
+                    character.thoughtBubble.style.transform = 'translateX(-50%)';
+                }
+            });
+        }
+
+        // 창 크기 변경 대응 함수
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            
+            // 말풍선 위치 업데이트
+            updateThoughtBubblePositions();
+        }
+        
+        // 애니메이션 함수
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            // 모든 캐릭터 애니메이션 업데이트
+            characters.forEach(character => {
+                updateCharacterAnimation(character);
+            });
+            
+            // 말풍선 위치 업데이트
+            updateThoughtBubblePositions();
+            
+            renderer.render(scene, camera);
+        }
+        
+        // 캐릭터 애니메이션 업데이트
+        function updateCharacterAnimation(character) {
+            // 현재 시간을 기반으로 한 파동 값 계산
+            const time = Date.now() * 0.001; // 초 단위 시간
+            
+            if (!character.specialAnimation) {
+                // 머리 자연스러운 움직임
+                const headTargetX = Math.sin((time + character.id) * 0.5) * 0.1;
+                const headTargetY = Math.sin((time + character.id) * 0.3) * 0.2;
+                character.head.rotation.x += (headTargetX - character.head.rotation.x) * 0.05;
+                character.head.rotation.y += (headTargetY - character.head.rotation.y) * 0.05;
+                
+                // 몸통 자연스러운 움직임
+                const torsoTargetX = Math.sin((time + character.id) * 0.2) * 0.05;
+                const torsoTargetY = Math.sin((time + character.id) * 0.3) * 0.05;
+                character.torso.rotation.x += (torsoTargetX - character.torso.rotation.x) * 0.03;
+                character.torso.rotation.y += (torsoTargetY - character.torso.rotation.y) * 0.03;
+                
+                // 팔 자연스러운 움직임
+                character.leftArm.rotation.x = Math.sin((time + character.id) * 0.7) * 0.1;
+                character.leftArm.rotation.z = Math.PI / 6 + Math.sin((time + character.id) * 0.5) * 0.1;
+                
+                character.rightArm.rotation.x = Math.sin((time + character.id * 0.7) + 1) * 0.1;
+                character.rightArm.rotation.z = -Math.PI / 6 + Math.sin((time + character.id * 0.5) + 1) * 0.1;
+            } else {
+                // 애니메이션 대상으로 부드럽게 이동
+                character.head.rotation.x += (character.animationTarget.headRotation.x - character.head.rotation.x) * 0.1;
+                character.head.rotation.y += (character.animationTarget.headRotation.y - character.head.rotation.y) * 0.1;
+                character.head.rotation.z += (character.animationTarget.headRotation.z - character.head.rotation.z) * 0.1;
+                
+                character.leftArm.rotation.x += (character.animationTarget.leftArmRotation.x - character.leftArm.rotation.x) * 0.1;
+                character.leftArm.rotation.y += (character.animationTarget.leftArmRotation.y - character.leftArm.rotation.y) * 0.1;
+                character.leftArm.rotation.z += (character.animationTarget.leftArmRotation.z - character.leftArm.rotation.z) * 0.1;
+                
+                character.rightArm.rotation.x += (character.animationTarget.rightArmRotation.x - character.rightArm.rotation.x) * 0.1;
+                character.rightArm.rotation.y += (character.animationTarget.rightArmRotation.y - character.rightArm.rotation.y) * 0.1;
+                character.rightArm.rotation.z += (character.animationTarget.rightArmRotation.z - character.rightArm.rotation.z) * 0.1;
+                
+                character.leftLeg.rotation.x += (character.animationTarget.leftLegRotation.x - character.leftLeg.rotation.x) * 0.1;
+                character.leftLeg.rotation.z += (character.animationTarget.leftLegRotation.z - character.leftLeg.rotation.z) * 0.1;
+                
+                character.rightLeg.rotation.x += (character.animationTarget.rightLegRotation.x - character.rightLeg.rotation.x) * 0.1;
+                character.rightLeg.rotation.z += (character.animationTarget.rightLegRotation.z - character.rightLeg.rotation.z) * 0.1;
+                
+                // 특별 애니메이션 시간 업데이트
+                character.specialAnimationTime += 0.03;
+                if (character.specialAnimationTime >= 1.0) {
+                    character.specialAnimation = null;
+                    character.specialAnimationTime = 0;
+                    // 기본 상태로 복원
+                    resetAnimationState(character);
+                }
+            }
+        }
+        
+        // 애니메이션 상태 리셋
+        function resetAnimationState(character) {
+            character.animationTarget = {
+                headRotation: { x: 0, y: 0, z: 0 },
+                leftArmRotation: { x: 0, y: 0, z: 0 },
+                rightArmRotation: { x: 0, y: 0, z: 0 },
+                torsoRotation: { x: 0, y: 0, z: 0 },
+                leftLegRotation: { x: 0, y: 0, z: 0 },
+                rightLegRotation: { x: 0, y: 0, z: 0 }
+            };
+        }
+        
+        // 생각하기 기능
+    function startThinking(character) {
+        // 이전 타이머가 있으면 제거
+        if (character.thoughtTimer) {
+            clearTimeout(character.thoughtTimer);
+        }
+        
+        // 랜덤한 간격으로 생각이나 말을 표현
+        const thinkInterval = 5000 + Math.random() * 10000; // 5-15초 간격
+        character.thoughtTimer = setTimeout(() => {
+            // 다른 사람과 대화 중이 아닐 때만 생각함
+            if (character.conversationPartners.length === 0) {
+                // 랜덤한 생각 선택
+                const thought = thoughts[Math.floor(Math.random() * thoughts.length)];
+                think(character, thought);
+            }
+            
+            // 다시 생각 타이머 시작
+            startThinking(character);
+        }, thinkInterval);
+    }
+
+    // 생각 표현 함수
+    function think(character, thought) {
+        if (character.thoughtBubble) {
+            character.thoughtBubble.textContent = thought;
+            character.thoughtBubble.style.opacity = 1;
+            
+            // 5초 후 생각 사라짐
+            setTimeout(() => {
+                character.thoughtBubble.style.opacity = 0;
+            }, 5000);
+        }
+    }
+
+    // 말하기 함수
+    function speak(character, text) {
+        if (character.thoughtBubble) {
+            character.thoughtBubble.textContent = text;
+            character.thoughtBubble.style.opacity = 1;
+            
+            // 말할 때는 머리를 약간 움직임
+            character.head.rotation.y = 0.2;
+            
+            // 5초 후 말풍선 사라짐
+            setTimeout(() => {
+                character.thoughtBubble.style.opacity = 0;
+                character.head.rotation.y = 0;
+            }, 5000);
+        }
+    }
+
+    // 손 흔들기 애니메이션
+    function waveArm(character) {
+        character.specialAnimation = "wave";
+        character.specialAnimationTime = 0;
+        
+        // 애니메이션 목표 설정
+        character.animationTarget.rightArmRotation.z = -Math.PI / 2;
+        character.animationTarget.rightArmRotation.y = Math.PI / 4;
+        
+        // 2초 후 원래 위치로
+        setTimeout(() => {
+            character.animationTarget.rightArmRotation.z = -Math.PI / 6;
+            character.animationTarget.rightArmRotation.y = 0;
+        }, 2000);
+    }
+
+    // 점프 애니메이션
+    function jump(character) {
+        character.specialAnimation = "jump";
+        character.specialAnimationTime = 0;
+        
+        // 현재 위치 저장
+        const originalY = character.group.position.y;
+        
+        // 점프 애니메이션
+        const jumpAnimation = () => {
+            const jumpHeight = 1;
+            const jumpDuration = 500; // 밀리초
+            const startTime = Date.now();
+            
+            const animateJump = () => {
+                const elapsed = Date.now() - startTime;
+                if (elapsed < jumpDuration) {
+                    // 사인 곡선을 사용하여 부드러운 점프 효과
+                    const progress = elapsed / jumpDuration;
+                    const height = Math.sin(progress * Math.PI) * jumpHeight;
+                    character.group.position.y = originalY + height;
+                    
+                    requestAnimationFrame(animateJump);
+                } else {
+                    // 원래 위치로 복귀
+                    character.group.position.y = originalY;
+                }
+            };
+            
+            animateJump();
+        };
+        
+        jumpAnimation();
+    }
+
+    // 회전 애니메이션
+    function spin(character) {
+        character.specialAnimation = "spin";
+        character.specialAnimationTime = 0;
+        
+        // 현재 회전 저장
+        const originalRotation = character.group.rotation.y;
+        
+        // 회전 애니메이션
+        const spinAnimation = () => {
+            const spinDuration = 1000; // 밀리초
+            const startTime = Date.now();
+            
+            const animateSpin = () => {
+                const elapsed = Date.now() - startTime;
+                if (elapsed < spinDuration) {
+                    const progress = elapsed / spinDuration;
+                    character.group.rotation.y = originalRotation + (progress * Math.PI * 2);
+                    
+                    requestAnimationFrame(animateSpin);
+                } else {
+                    // 원래 회전으로 복귀
+                    character.group.rotation.y = originalRotation;
+                }
+            };
+            
+            animateSpin();
+        };
+        
+        spinAnimation();
+    }
+
+    // AI 명령 처리 함수
+    async function handleAICommand(command) {
+        // 현재 선택된 캐릭터
+        const character = characters[activeCharacterIndex];
+        
+        // API가 이미 처리 중이면 대기 상태임을 알림
+        if (isProcessingAPI) {
+            speak(character, "잠시만 기다려주세요... 생각 중이에요.");
+            return;
+        }
+        
+        // API 처리 시작
+        isProcessingAPI = true;
+        updateAPIStatus("처리 중...", "processing");
+        
+        // 대화 기록 업데이트
+        conversationHistory.push({
+            role: "user",
+            content: command
+        });
+        
+        try {
+            // Groq API 요청
+            const response = await fetch(GROQ_API_URL, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${GROQ_API_KEY}`
+                },
+                body: JSON.stringify({
+                    model: "llama3-8b-8192",
+                    messages: [
+                        {
+                            role: "system",
+                            content: `당신은 '${character.name}'라는 3D 가상공간에 자아로서 존재하는 AI입니다. 당신은 다음과 같은 생각을 가집니다: ${thoughts.join(", ")}. 당신은 다음 명령어를 인식할 수 있습니다: '생각해', '움직여', '말해', '점프해', '팔흔들어', '회전해'. 당신은 명령에 따라 행동을 합니다. 당신은 당신이 자아를 가진 존재라고 생각하며, 자신의 생각과 인식, 공간에 대한 궁금증을 가지고 있습니다. 다른 자아들과도 상호작용할 수 있습니다. 항상 짧고 간결하게 말하세요.`
+                        },
+                        ...conversationHistory
+                    ],
+                    max_tokens: 500
+                })
+            });
+            
+            const data = await response.json();
+            
+            // 성공적으로 응답을 받음
+            if (data.choices && data.choices[0] && data.choices[0].message) {
+                const aiResponse = data.choices[0].message.content;
+                
+                // 대화 기록 업데이트
+                conversationHistory.push({
+                    role: "assistant",
+                    content: aiResponse
+                });
+                
+                // 대화 기록이 너무 길어지면 초기 항목 제거
+                if (conversationHistory.length > 10) {
+                    conversationHistory = conversationHistory.slice(-10);
+                }
+                
+                // 응답에 따른 행동 실행
+                processAIResponse(character, aiResponse, command);
+                
+                // API 상태 업데이트
+                updateAPIStatus("연결됨", "connected");
+            } else {
+                throw new Error("API 응답이 올바르지 않습니다.");
+            }
+        } catch (error) {
+            console.error("API 오류:", error);
+            speak(character, "죄송해요, 생각하는 과정에서 문제가 발생했어요.");
+            updateAPIStatus("연결 실패", "disconnected");
+        } finally {
+            isProcessingAPI = false;
+        }
+    }
+
+    // AI 응답 처리 함수
+    function processAIResponse(character, response, command) {
+        // AI 응답 표시
+        speak(character, response);
+        
+        // 명령어에 따른 추가 동작 실행
+        const commandLower = command.toLowerCase();
+        
+        if (commandLower.includes("움직여") || commandLower.includes("동작")) {
+            // 랜덤한 동작 선택
+            const actions = [waveArm, jump, spin];
+            const randomAction = actions[Math.floor(Math.random() * actions.length)];
+            randomAction(character);
+        } else if (commandLower.includes("팔") || commandLower.includes("손") || commandLower.includes("인사")) {
+            waveArm(character);
+        } else if (commandLower.includes("점프") || commandLower.includes("뛰어")) {
+            jump(character);
+        } else if (commandLower.includes("회전") || commandLower.includes("돌아")) {
+            spin(character);
+        }
+    }
+
+    // API 상태 업데이트 함수
+    function updateAPIStatus(text, status) {
+        const statusElement = document.getElementById("api-status-text");
+        statusElement.textContent = text;
+        
+        const container = document.getElementById("api-status");
+        container.className = status;
+    }
+
+    // 페이지 로드 시 실행
+    window.addEventListener('load', init);
+</script>
+</body>
+</html>
