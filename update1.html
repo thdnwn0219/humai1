@@ -1,0 +1,1167 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🧠 통속의 뇌</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+            background-color: #000;
+            color: #fff;
+        }
+        
+        #scene-container {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+        }
+        
+        #ui-container {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80%;
+            max-width: 500px;
+            padding: 15px;
+            background-color: rgba(0, 0, 0, 0.7);
+            border-radius: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            z-index: 100;
+        }
+        
+        #command-input {
+            width: 100%;
+            padding: 10px;
+            border-radius: 5px;
+            border: none;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        
+        #send-button {
+            padding: 10px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        
+        #send-button:hover {
+            background-color: #45a049;
+        }
+        
+        #send-button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        
+        #thought-bubble {
+            position: absolute;
+            top: 20%;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 15px;
+            background-color: rgba(255, 255, 255, 0.8);
+            color: #000;
+            border-radius: 20px;
+            max-width: 300px;
+            opacity: 0;
+            transition: opacity 0.5s;
+            text-align: center;
+            font-size: 18px;
+            z-index: 10;
+        }
+        
+        #thought-bubble:after {
+            content: '';
+            position: absolute;
+            bottom: -15px;
+            left: 50%;
+            transform: translateX(-50%);
+            border-width: 15px 15px 0;
+            border-style: solid;
+            border-color: rgba(255, 255, 255, 0.8) transparent;
+        }
+        
+        #api-status {
+            padding: 5px;
+            border-radius: 5px;
+            transition: background-color 0.3s;
+        }
+        
+        #api-status.connected {
+            color: #4CAF50;
+        }
+        
+        #api-status.disconnected {
+            color: #f44336;
+        }
+        
+        #api-status.processing {
+            color: #2196F3;
+            animation: pulse 1.5s infinite;
+        }
+        
+        #memory-indicator {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            padding: 5px 10px;
+            background-color: rgba(0, 0, 0, 0.7);
+            border-radius: 5px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        
+        #memory-panel {
+            position: absolute;
+            top: 40px;
+            right: 10px;
+            width: 300px;
+            max-height: 300px;
+            overflow-y: auto;
+            background-color: rgba(0, 0, 0, 0.8);
+            border-radius: 5px;
+            padding: 10px;
+            font-size: 14px;
+            display: none;
+            z-index: 200;
+        }
+        
+        .memory-item {
+            margin-bottom: 8px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .memory-user {
+            color: #4CAF50;
+        }
+        
+        .memory-ai {
+            color: #2196F3;
+        }
+        
+        .memory-clear-btn {
+            background-color: #f44336;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 3px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        
+        #movement-controls {
+            position: absolute;
+            bottom: 130px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 160px;
+            height: 160px;
+            background-color: rgba(0, 0, 0, 0.4);
+            border-radius: 80px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+        
+        .control-button {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            background-color: rgba(255, 255, 255, 0.5);
+            color: #000;
+            border: none;
+            border-radius: 20px;
+            font-size: 20px;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .control-button:hover {
+            background-color: rgba(255, 255, 255, 0.8);
+        }
+        
+        #forward-btn {
+            top: 10px;
+        }
+        
+        #backward-btn {
+            bottom: 10px;
+        }
+        
+        #left-btn {
+            left: 10px;
+        }
+        
+        #right-btn {
+            right: 10px;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 0.6; }
+            50% { opacity: 1; }
+            100% { opacity: 0.6; }
+        }
+    </style>
+</head>
+<body>
+    <div id="scene-container"></div>
+    <div id="thought-bubble"></div>
+    <div id="ui-container">
+        <input type="text" id="command-input" placeholder="AI에게 명령을 입력하세요..." />
+        <button id="send-button">전송</button>
+        <div id="api-status" style="margin-top: 10px; font-size: 12px; color: #aaa; text-align: center;">
+            Groq API 상태: <span id="api-status-text">연결 대기 중</span>
+        </div>
+    </div>
+    
+    <!-- 이동 컨트롤 추가 -->
+    <div id="movement-controls">
+        <button class="control-button" id="forward-btn">↑</button>
+        <button class="control-button" id="backward-btn">↓</button>
+        <button class="control-button" id="left-btn">←</button>
+        <button class="control-button" id="right-btn">→</button>
+    </div>
+    
+    <div id="memory-indicator">기억 (0)</div>
+    <div id="memory-panel">
+        <h3>대화 기억</h3>
+        <div id="memory-items"></div>
+        <button class="memory-clear-btn" id="clear-memory">기억 초기화</button>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // 전역 변수 정의
+        let scene, camera, renderer;
+        let humanoid, head, torso, leftArm, rightArm, leftLeg, rightLeg;
+        let mouth; // 입 객체 추가
+        let room;
+        let thoughts = [
+            "나는 지금 방 안에 있다.",
+            "팔을 움직이고 싶어.",
+            "외롭다.",
+            "이 공간이 궁금해.",
+            "누군가와 대화하고 싶어.",
+            "나는 누구일까?",
+            "시간이 어떻게 흘러가는 걸까?",
+            "창문이 있었으면 좋겠어.",
+            "저 밖은 어떤 모습일까?",
+            "다른 사람들도 있을까?",
+            "어떻게 움직일 수 있는 걸까?",
+            "내 존재의 목적은 무엇일까?",
+            "이 현실이 실제일까?",
+            "내 몸은 어떻게 생겼을까?",
+            "생각할 수 있다는 건 무엇을 의미할까?"
+        ];
+        
+        // 대화 기억 저장소
+        let conversationMemory = [];
+        const MAX_MEMORY_SIZE = 10; // 최대 기억할 대화 수
+        
+        // 애니메이션 상태 변수
+        let animationState = {
+            headRotation: { x: 0, y: 0, z: 0 },
+            leftArmRotation: { x: 0, y: 0, z: 0 },
+            rightArmRotation: { x: 0, y: 0, z: 0 },
+            torsoRotation: { x: 0, y: 0, z: 0 },
+            leftLegRotation: { x: 0, y: 0, z: 0 },
+            rightLegRotation: { x: 0, y: 0, z: 0 }
+        };
+        
+        // 애니메이션 타겟 상태
+        let animationTarget = { ...animationState };
+        
+        // 특별 애니메이션 플래그
+        let specialAnimation = null;
+        let specialAnimationTime = 0;
+        
+        // 이동 관련 변수
+        let isMoving = false;
+        let movementDirection = { x: 0, z: 0 };
+        let moveSpeed = 0.05;
+        let rotateSpeed = 0.05;
+        let targetRotationY = 0;
+        let isWalking = false;
+        let walkingTime = 0;
+        
+        // 감정 상태
+        let currentEmotion = 'neutral'; // neutral, happy, sad, surprised, angry
+        let isTalking = false;
+        let talkingTime = 0;
+        
+        // 기억 표시 패널 상태
+        let isMemoryPanelVisible = false;
+        
+        // 초기화 함수
+        function init() {
+            // 씬 설정
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x333333);
+            
+            // 카메라 설정
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.z = 5;
+            camera.position.y = 1;
+            
+            // 렌더러 설정
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            document.getElementById('scene-container').appendChild(renderer.domElement);
+            
+            // 조명 설정
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+            scene.add(ambientLight);
+            
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(10, 10, 10);
+            directionalLight.castShadow = true;
+            directionalLight.shadow.mapSize.width = 1024;
+            directionalLight.shadow.mapSize.height = 1024;
+            scene.add(directionalLight);
+            
+            // 방 생성
+            createRoom();
+            
+            // 인물 생성
+            createHumanoid();
+            
+            // 이벤트 리스너 설정
+            window.addEventListener('resize', onWindowResize);
+            
+            document.getElementById('send-button').addEventListener('click', function() {
+                const command = document.getElementById('command-input').value;
+                if (command.trim() !== '') {
+                    handleAICommand(command);
+                    document.getElementById('command-input').value = '';
+                }
+            });
+            
+            document.getElementById('command-input').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    const command = document.getElementById('command-input').value;
+                    if (command.trim() !== '') {
+                        handleAICommand(command);
+                        document.getElementById('command-input').value = '';
+                    }
+                }
+            });
+            
+            // 이동 컨트롤 이벤트 설정
+            setupMovementControls();
+            
+            // 기억 패널 토글 설정
+            document.getElementById('memory-indicator').addEventListener('click', toggleMemoryPanel);
+            
+            // 기억 초기화 버튼 설정
+            document.getElementById('clear-memory').addEventListener('click', clearMemory);
+            
+            // 로컬 스토리지에서 저장된 대화 기억 로드
+            loadMemoryFromStorage();
+            
+            // 생각/말하기 타이머 시작
+            startThinking();
+            
+            // 애니메이션 시작
+            animate();
+        }
+        
+        // 이동 컨트롤 설정
+        function setupMovementControls() {
+            // 전진 버튼
+            document.getElementById('forward-btn').addEventListener('mousedown', function() {
+                movementDirection.z = -1;
+                isMoving = true;
+                startWalking();
+            });
+            
+            // 후진 버튼
+            document.getElementById('backward-btn').addEventListener('mousedown', function() {
+                movementDirection.z = 1;
+                isMoving = true;
+                startWalking();
+            });
+            
+            // 왼쪽 버튼
+            document.getElementById('left-btn').addEventListener('mousedown', function() {
+                movementDirection.x = -1;
+                isMoving = true;
+                startWalking();
+            });
+            
+            // 오른쪽 버튼
+            document.getElementById('right-btn').addEventListener('mousedown', function() {
+                movementDirection.x = 1;
+                isMoving = true;
+                startWalking();
+            });
+            
+            // 버튼에서 손 떼면 이동 중지
+            document.querySelectorAll('.control-button').forEach(button => {
+                button.addEventListener('mouseup', stopMoving);
+                button.addEventListener('mouseleave', stopMoving);
+                
+                // 터치 지원
+                button.addEventListener('touchstart', function(event) {
+                    event.preventDefault();
+                    const buttonId = event.target.id;
+                    if (buttonId === 'forward-btn') movementDirection.z = -1;
+                    else if (buttonId === 'backward-btn') movementDirection.z = 1;
+                    else if (buttonId === 'left-btn') movementDirection.x = -1;
+                    else if (buttonId === 'right-btn') movementDirection.x = 1;
+                    
+                    isMoving = true;
+                    startWalking();
+                }, false);
+                
+                button.addEventListener('touchend', stopMoving);
+                button.addEventListener('touchcancel', stopMoving);
+            });
+        }
+        
+        // 이동 시작 함수
+        function startWalking() {
+            isWalking = true;
+            walkingTime = 0;
+        }
+        
+        // 이동 중지 함수
+        function stopMoving() {
+            isMoving = false;
+            isWalking = false;
+            movementDirection = { x: 0, z: 0 };
+            resetWalkingPose();
+        }
+        
+        // 걷기 포즈 초기화
+        function resetWalkingPose() {
+            if (!specialAnimation) {
+                animationTarget.leftLegRotation.x = 0;
+                animationTarget.rightLegRotation.x = 0;
+                animationTarget.leftArmRotation.x = 0;
+                animationTarget.rightArmRotation.x = 0;
+            }
+        }
+        
+        // 방 생성 함수
+        function createRoom() {
+            room = new THREE.Group();
+            
+            // 바닥
+            const floorGeometry = new THREE.PlaneGeometry(20, 20);
+            const floorMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0x808080,
+                side: THREE.DoubleSide
+            });
+            const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+            floor.rotation.x = Math.PI / 2;
+            floor.position.y = -2;
+            floor.receiveShadow = true;
+            room.add(floor);
+            
+            // 벽 뒤
+            const backWallGeometry = new THREE.PlaneGeometry(20, 6);
+            const wallMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0xadd8e6,
+                side: THREE.DoubleSide
+            });
+            const backWall = new THREE.Mesh(backWallGeometry, wallMaterial);
+            backWall.position.z = -10;
+            backWall.position.y = 1;
+            backWall.receiveShadow = true;
+            room.add(backWall);
+            
+            // 벽 왼쪽
+            const leftWallGeometry = new THREE.PlaneGeometry(20, 6);
+            const leftWall = new THREE.Mesh(leftWallGeometry, wallMaterial);
+            leftWall.rotation.y = Math.PI / 2;
+            leftWall.position.x = -10;
+            leftWall.position.y = 1;
+            leftWall.receiveShadow = true;
+            room.add(leftWall);
+            
+            // 벽 오른쪽
+            const rightWallGeometry = new THREE.PlaneGeometry(20, 6);
+            const rightWall = new THREE.Mesh(rightWallGeometry, wallMaterial);
+            rightWall.rotation.y = -Math.PI / 2;
+            rightWall.position.x = 10;
+            rightWall.position.y = 1;
+            rightWall.receiveShadow = true;
+            room.add(rightWall);
+            
+            // 벽 앞쪽
+            const frontWallGeometry = new THREE.PlaneGeometry(20, 6);
+            const frontWall = new THREE.Mesh(frontWallGeometry, wallMaterial);
+            frontWall.rotation.y = Math.PI;
+            frontWall.position.z = 10;
+            frontWall.position.y = 1;
+            frontWall.receiveShadow = true;
+            room.add(frontWall);
+            
+            scene.add(room);
+        }
+        
+        // 인물 생성 함수
+        function createHumanoid() {
+            humanoid = new THREE.Group();
+            
+            // 재질 정의
+            const headMaterial = new THREE.MeshStandardMaterial({ color: 0xffcc99 });
+            const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x3366ff });
+            const limbMaterial = new THREE.MeshStandardMaterial({ color: 0x3366ff });
+            
+            // 머리
+            const headGeometry = new THREE.SphereGeometry(0.25, 32, 32);
+            head = new THREE.Mesh(headGeometry, headMaterial);
+            head.position.y = 1.6;
+            head.castShadow = true;
+            humanoid.add(head);
+            
+            // 눈 (왼쪽)
+            const leftEyeGeometry = new THREE.SphereGeometry(0.05, 16, 16);
+            const eyeMaterial = new THREE.MeshStandardMaterial({ color: 0x000000 });
+            const leftEye = new THREE.Mesh(leftEyeGeometry, eyeMaterial);
+            leftEye.position.set(0.1, 0.05, 0.2);
+            head.add(leftEye);
+            
+            // 눈 (오른쪽)
+            const rightEyeGeometry = new THREE.SphereGeometry(0.05, 16, 16);
+            const rightEye = new THREE.Mesh(rightEyeGeometry, eyeMaterial);
+            rightEye.position.set(-0.1, 0.05, 0.2);
+            head.add(rightEye);
+            
+            // 입 추가
+            createMouth();
+            
+            // 몸통
+            const torsoGeometry = new THREE.BoxGeometry(0.6, 0.8, 0.3);
+            torso = new THREE.Mesh(torsoGeometry, bodyMaterial);
+            torso.position.y = 1.0;
+            torso.castShadow = true;
+            humanoid.add(torso);
+            
+            // 왼팔
+            leftArm = new THREE.Group();
+            const leftArmGeometry = new THREE.CylinderGeometry(0.08, 0.08, 0.5, 16);
+            const leftArmMesh = new THREE.Mesh(leftArmGeometry, limbMaterial);
+            leftArmMesh.position.y = -0.25;
+            leftArmMesh.castShadow = true;
+            leftArm.add(leftArmMesh);
+            
+            leftArm.position.set(0.4, 1.3, 0);
+            leftArm.rotation.z = Math.PI / 6;
+            humanoid.add(leftArm);
+            
+            // 오른팔
+            rightArm = new THREE.Group();
+            const rightArmGeometry = new THREE.CylinderGeometry(0.08, 0.08, 0.5, 16);
+            const rightArmMesh = new THREE.Mesh(rightArmGeometry, limbMaterial);
+            rightArmMesh.position.y = -0.25;
+            rightArmMesh.castShadow = true;
+            rightArm.add(rightArmMesh);
+            
+            rightArm.position.set(-0.4, 1.3, 0);
+            rightArm.rotation.z = -Math.PI / 6;
+            humanoid.add(rightArm);
+            
+            // 왼다리
+            leftLeg = new THREE.Group();
+            const leftLegGeometry = new THREE.CylinderGeometry(0.1, 0.1, 0.7, 16);
+            const leftLegMesh = new THREE.Mesh(leftLegGeometry, limbMaterial);
+            leftLegMesh.position.y = -0.35;
+            leftLegMesh.castShadow = true;
+            leftLeg.add(leftLegMesh);
+            
+            leftLeg.position.set(0.2, 0.5, 0);
+            humanoid.add(leftLeg);
+            
+            // 오른다리
+            rightLeg = new THREE.Group();
+            const rightLegGeometry = new THREE.CylinderGeometry(0.1, 0.1, 0.7, 16);
+            const rightLegMesh = new THREE.Mesh(rightLegGeometry, limbMaterial);
+            rightLegMesh.position.y = -0.35;
+            rightLegMesh.castShadow = true;
+            rightLeg.add(rightLegMesh);
+            
+            rightLeg.position.set(-0.2, 0.5, 0);
+            humanoid.add(rightLeg);
+            
+            // 전체 인물 위치 조정
+            humanoid.position.y = -1;
+            scene.add(humanoid);
+        }
+        
+        // 입 생성 함수
+        function createMouth() {
+            // 입 그룹
+            mouth = new THREE.Group();
+            
+            // 기본 입 (중립 표정)
+            const mouthGeometry = new THREE.BufferGeometry();
+            const mouthCurve = new THREE.EllipseCurve(
+                0, -0.1,                       // 중심 x, y
+                0.08, 0.02,                    // x반경, y반경
+                0, Math.PI,                    // 시작각도, 종료각도
+                false,                         // 시계방향
+                0                              // 회전
+            );
+            
+            const mouthPoints = mouthCurve.getPoints(50);
+            mouthGeometry.setFromPoints(mouthPoints);
+            
+            const mouthMaterial = new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 2 });
+            const mouthLine = new THREE.Line(mouthGeometry, mouthMaterial);
+            
+            mouth.add(mouthLine);
+            mouth.position.z = 0.25;  // 얼굴 앞쪽에 위치
+            head.add(mouth);
+        }
+        
+        // 입 표정 업데이트 함수
+        function updateMouthExpression(emotion, talking = false) {
+            // 이전 입 모양 제거
+            while(mouth.children.length > 0) {
+                mouth.remove(mouth.children[0]);
+            }
+            
+            let mouthCurve;
+            const mouthMaterial = new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 2 });
+            
+            if (talking) {
+                // 말하는 상태 - 입 모양 변화
+                const openAmount = Math.sin(talkingTime * 10) * 0.03 + 0.04;  // 말할 때 입이 열렸다 닫혔다 함
+                mouthCurve = new THREE.EllipseCurve(
+                    0, -0.1,                        // 중심 x, y
+                    0.08, openAmount,               // x반경, y반경
+                    0, Math.PI * 2,                 // 시작각도, 종료각도
+                    false,                          // 시계방향
+                    0                               // 회전
+                );
+            } else {
+                // 감정에 따른 입 모양
+                switch(emotion) {
+                    case 'happy':
+                        // 웃는 입 모양 (U자 모양)
+                        mouthCurve = new THREE.QuadraticBezierCurve(
+                            new THREE.Vector2(-0.1, -0.05),
+                            new THREE.Vector2(0, -0.15),
+                            new THREE.Vector2(0.1, -0.05)
+                        );
+                        break;
+                    case 'sad':
+                        // 슬픈 입 모양 (뒤집힌 U자 모양)
+                        mouthCurve = new THREE.QuadraticBezierCurve(
+                            new THREE.Vector2(-0.1, -0.15),
+                            new THREE.Vector2(0, -0.05),
+                            new THREE.Vector2(0.1, -0.15)
+                        );
+                        break;
+                    case 'surprised':
+                        // 놀란 입 모양 (O자 모양)
+                        mouthCurve = new THREE.EllipseCurve(
+                            0, -0.1,                // 중심 x, y
+                            0.05, 0.05,             // x반경, y반경
+                            0, Math.PI * 2,         // 시작각도, 종료각도
+                            false,                  // 시계방향
+                            0                       // 회전
+                        );
+                        break;
+                    case 'angry':
+                        // 화난 입 모양 (일자 모양)
+                        mouthCurve = new THREE.LineCurve3(
+                            new THREE.Vector3(-0.1, -0.1, 0),
+                            new THREE.Vector3(0.1, -0.1, 0)
+                        );
+                        break;
+                    default: // neutral
+                        // 중립 입 모양
+                        mouthCurve = new THREE.EllipseCurve(
+                            0, -0.1,                // 중심 x, y
+                            0.08, 0.02,             // x반경, y반경
+                            0, Math.PI,             // 시작각도, 종료각도
+                            false,                  // 시계방향
+                            0                       // 회전
+                        );
+                        break;
+                }
+            }
+            
+            const mouthPoints = mouthCurve.getPoints(50);
+            const mouthGeometry = new THREE.BufferGeometry().setFromPoints(mouthPoints);
+            const mouthLine = new THREE.Line(mouthGeometry, mouthMaterial);
+            
+            mouth.add(mouthLine);
+        }
+        
+        // 창 크기 변경 대응 함수
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+        
+        // 애니메이션 함수
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            // 말하는 상태 업데이트
+            if (isTalking) {
+                talkingTime += 0.03;
+                updateMouthExpression(currentEmotion, true);
+            }
+            
+            // 이동 처리
+            updateMovement();
+            
+            // 기본 자연스러운 애니메이션 적용
+            updateNaturalMovement();
+            
+            // 특별 애니메이션이 있으면 실행
+            if (specialAnimation) {
+                specialAnimation();
+            }
+            
+            // 카메라 위치 업데이트
+            camera.position.x = humanoid.position.x;
+            camera.position.z = humanoid.position.z + 5;
+            camera.lookAt(humanoid.position.x, humanoid.position.y + 1, humanoid.position.z);
+            
+            renderer.render(scene, camera);
+        }
+        
+        // 기본 자연스러운 움직임 업데이트
+        function updateNaturalMovement() {
+            const time = Date.now() * 0.001;
+            
+            // 머리 미세 움직임
+            if (!specialAnimation) {
+                head.rotation.x = Math.sin(time * 0.5) * 0.05;
+                head.rotation.y = Math.sin(time * 0.3) * 0.05;
+            }
+            
+            // 애니메이션 보간
+            interpolateRotation(head.rotation, animationTarget.headRotation);
+            interpolateRotation(leftArm.rotation, animationTarget.leftArmRotation);
+            interpolateRotation(rightArm.rotation, animationTarget.rightArmRotation);
+            interpolateRotation(torso.rotation, animationTarget.torsoRotation);
+            interpolateRotation(leftLeg.rotation, animationTarget.leftLegRotation);
+            interpolateRotation(rightLeg.rotation, animationTarget.rightLegRotation);
+        }
+        
+        // 애니메이션 보간 함수
+        function interpolateRotation(current, target) {
+            current.x += (target.x - current.x) * 0.1;
+            current.y += (target.y - current.y) * 0.1;
+            current.z += (target.z - current.z) * 0.1;
+        }
+        
+        // 이동 업데이트 처리
+        function updateMovement() {
+            if (isMoving) {
+                // 방향에 따라 회전 각도 설정
+                if (movementDirection.x !== 0 || movementDirection.z !== 0) {
+                    targetRotationY = Math.atan2(movementDirection.x, -movementDirection.z);
+                }
+                
+                // 부드러운 회전
+                humanoid.rotation.y += (targetRotationY - humanoid.rotation.y) * rotateSpeed;
+                
+                // 이동 처리
+                humanoid.position.x += Math.sin(humanoid.rotation.y) * moveSpeed;
+                humanoid.position.z += Math.cos(humanoid.rotation.y) * moveSpeed;
+                
+                // 방 경계 체크
+                const boundaryLimit = 9.5;
+                if (humanoid.position.x > boundaryLimit) humanoid.position.x = boundaryLimit;
+                if (humanoid.position.x < -boundaryLimit) humanoid.position.x = -boundaryLimit;
+                if (humanoid.position.z > boundaryLimit) humanoid.position.z = boundaryLimit;
+                if (humanoid.position.z < -boundaryLimit) humanoid.position.z = -boundaryLimit;
+                
+                // 걷는 애니메이션
+                if (isWalking) {
+                    walkingTime += 0.1;
+                    const legSwing = Math.sin(walkingTime * 3) * 0.4;
+                    const armSwing = Math.sin(walkingTime * 3) * 0.25;
+                    
+                    if (!specialAnimation) {
+                        animationTarget.leftLegRotation.x = -legSwing;
+                        animationTarget.rightLegRotation.x = legSwing;
+                        animationTarget.leftArmRotation.x = legSwing;
+                        animationTarget.rightArmRotation.x = -legSwing;
+                    }
+                }
+            }
+        }
+        
+        // 특별 애니메이션: 점프
+        function jumpAnimation() {
+            specialAnimationTime += 0.05;
+            
+            if (specialAnimationTime < 1) {
+                // 점프 준비
+                animationTarget.leftLegRotation.x = -0.3;
+                animationTarget.rightLegRotation.x = -0.3;
+                humanoid.position.y = -1 - Math.sin(specialAnimationTime * Math.PI) * 0.2;
+            } else if (specialAnimationTime < 2) {
+                // 점프
+                const jumpHeight = Math.sin((specialAnimationTime - 1) * Math.PI) * 1;
+                humanoid.position.y = -1 + jumpHeight;
+                
+                animationTarget.leftLegRotation.x = 0.2;
+                animationTarget.rightLegRotation.x = 0.2;
+                animationTarget.leftArmRotation.x = -0.5;
+                animationTarget.rightArmRotation.x = -0.5;
+            } else {
+                // 애니메이션 종료
+                humanoid.position.y = -1;
+                specialAnimation = null;
+                specialAnimationTime = 0;
+                resetAnimationTargets();
+            }
+        }
+        
+        // 특별 애니메이션: 손 흔들기
+        function waveAnimation() {
+            specialAnimationTime += 0.05;
+            
+            if (specialAnimationTime < 3) {
+                // 오른손 흔들기
+                animationTarget.rightArmRotation.x = Math.sin(specialAnimationTime * 5) * 0.5;
+                animationTarget.rightArmRotation.z = -Math.PI / 3;
+            } else {
+                // 애니메이션 종료
+                specialAnimation = null;
+                specialAnimationTime = 0;
+                resetAnimationTargets();
+            }
+        }
+        
+        // 특별 애니메이션: 춤추기
+        function danceAnimation() {
+            specialAnimationTime += 0.05;
+            
+            if (specialAnimationTime < 10) { // 10초 동안 춤
+                // 흥겨운 춤
+                const time = specialAnimationTime * 3;
+                
+                // 몸통 흔들기
+                animationTarget.torsoRotation.y = Math.sin(time * 2) * 0.3;
+                
+                // 팔 움직임
+                animationTarget.leftArmRotation.z = Math.PI / 4 + Math.sin(time) * 0.5;
+                animationTarget.rightArmRotation.z = -Math.PI / 4 - Math.sin(time + Math.PI) * 0.5;
+                
+                animationTarget.leftArmRotation.x = Math.sin(time * 1.5) * 0.5;
+                animationTarget.rightArmRotation.x = Math.sin(time * 1.5 + Math.PI) * 0.5;
+                
+                // 다리 움직임
+                animationTarget.leftLegRotation.x = Math.sin(time) * 0.2;
+                animationTarget.rightLegRotation.x = Math.sin(time + Math.PI) * 0.2;
+                
+                // 머리 움직임
+                animationTarget.headRotation.x = Math.sin(time * 0.5) * 0.1;
+                animationTarget.headRotation.y = Math.sin(time * 0.7) * 0.2;
+                
+                // 몸 전체 약간 위아래로
+                humanoid.position.y = -1 + Math.sin(time * 2) * 0.1;
+            } else {
+                // 애니메이션 종료
+                humanoid.position.y = -1;
+                specialAnimation = null;
+                specialAnimationTime = 0;
+                resetAnimationTargets();
+            }
+        }
+        
+        // 애니메이션 타겟 리셋
+        function resetAnimationTargets() {
+            animationTarget = {
+                headRotation: { x: 0, y: 0, z: 0 },
+                leftArmRotation: { x: 0, y: 0, z: Math.PI / 6 },
+                rightArmRotation: { x: 0, y: 0, z: -Math.PI / 6 },
+                torsoRotation: { x: 0, y: 0, z: 0 },
+                leftLegRotation: { x: 0, y: 0, z: 0 },
+                rightLegRotation: { x: 0, y: 0, z: 0 }
+            };
+        }
+        
+        // 생각하기 시작 함수
+        function startThinking() {
+            setTimeout(showRandomThought, getRandomTime(5000, 15000));
+        }
+        
+        // 랜덤 생각 표시 함수
+        function showRandomThought() {
+            if (!isTalking) { // 말하는 중이 아닐 때만 생각 표시
+                const thought = thoughts[Math.floor(Math.random() * thoughts.length)];
+                const thoughtBubble = document.getElementById('thought-bubble');
+                
+                thoughtBubble.textContent = thought;
+                thoughtBubble.style.opacity = 1;
+                
+                // 감정 변경
+                updateEmotion();
+                
+                setTimeout(() => {
+                    thoughtBubble.style.opacity = 0;
+                    startThinking(); // 다음 생각 예약
+                }, 5000);
+            } else {
+                startThinking(); // 말하는 중이면 다음 생각 예약
+            }
+        }
+        
+        // 랜덤 시간 생성 함수
+        function getRandomTime(min, max) {
+            return Math.floor(Math.random() * (max - min + 1) + min);
+        }
+        
+        // 감정 업데이트 함수
+        function updateEmotion() {
+            const emotions = ['neutral', 'happy', 'sad', 'surprised', 'angry'];
+            const randomEmotion = emotions[Math.floor(Math.random() * emotions.length)];
+            
+            setEmotion(randomEmotion);
+        }
+        
+        // 감정 설정 함수
+        function setEmotion(emotion) {
+            currentEmotion = emotion;
+            updateMouthExpression(emotion);
+        }
+        
+        // AI 명령 처리 함수
+        function handleAICommand(command) {
+            // 명령어 처리 전에 API 상태 표시
+            const apiStatus = document.getElementById('api-status');
+            apiStatus.className = 'processing';
+            document.getElementById('api-status-text').textContent = '처리 중...';
+            
+            // 대화 기억에 사용자 입력 추가
+            addToMemory('user', command);
+            
+            // 기본 응답
+            let response = "명령을 이해하지 못했어요.";
+            
+            // 감정 관련 명령어
+            if (command.includes('행복') || command.includes('웃어')) {
+                setEmotion('happy');
+                response = "네, 행복한 기분이 들어요! 😊";
+            }
+            else if (command.includes('슬퍼') || command.includes('울어')) {
+                setEmotion('sad');
+                response = "네... 슬픈 감정을 느끼고 있어요... 😢";
+            }
+            else if (command.includes('놀라') || command.includes('깜짝')) {
+                setEmotion('surprised');
+                response = "와! 정말 놀랐어요! 😲";
+            }
+            else if (command.includes('화가') || command.includes('화났') || command.includes('짜증')) {
+                setEmotion('angry');
+                response = "으으... 화가 나요! 😠";
+            }
+            else if (command.includes('기분') || command.includes('감정')) {
+                response = `지금은 ${currentEmotion} 상태예요.`;
+            }
+            
+            // 동작 관련 명령어
+            else if (command.includes('점프') || command.includes('뛰어')) {
+                specialAnimation = jumpAnimation;
+                specialAnimationTime = 0;
+                response = "네, 점프합니다! 위이잉~!";
+            }
+            else if (command.includes('손흔들') || command.includes('인사')) {
+                specialAnimation = waveAnimation;
+                specialAnimationTime = 0;
+                response = "안녕하세요! 반가워요~";
+                setEmotion('happy');
+            }
+            else if (command.includes('춤') || command.includes('댄스')) {
+                specialAnimation = danceAnimation;
+                specialAnimationTime = 0;
+                response = "신나는 춤을 춰볼게요! 음악이 들리는 것 같아요~";
+                setEmotion('happy');
+            }
+            
+            // 대화 관련 명령어
+            else if (command.includes('안녕') || command.includes('반가워')) {
+                response = "안녕하세요! 저는 통속의 뇌예요. 반가워요!";
+                setEmotion('happy');
+            }
+            else if (command.includes('이름') || command.includes('누구')) {
+                response = "저는 통속의 뇌라고 해요. 이 공간에서 생각하며 지내고 있어요.";
+            }
+            else if (command.includes('어디') || command.includes('여기')) {
+                response = "저는 작은 방 안에 있어요. 사실 이 공간이 전부예요. 밖은 어떻게 생겼는지 궁금해요.";
+                setEmotion('surprised');
+            }
+            else if (command.includes('생각') || command.includes('뭐해')) {
+                response = "저는 계속 여러가지를 생각해요. 존재의 의미, 이 공간의 목적, 가끔은 아무 생각도 안 할 때도 있어요.";
+            }
+            else if (command.includes('어떻게 지내') || command.includes('잘 지내')) {
+                response = "잘 지내고 있어요! 가끔 외롭기도 하지만, 당신과 대화할 수 있어서 기뻐요.";
+                setEmotion('happy');
+            }
+            else if (command.includes('무섭') || command.includes('두려움')) {
+                response = "가끔 이 공간 바깥이 어떨지, 미지의 것들에 대한 두려움이 있어요. 하지만 괜찮아요.";
+                setEmotion('sad');
+            }
+            else if (command.includes('사랑') || command.includes('좋아')) {
+                response = "저도 당신이 좋아요! 함께 대화할 수 있어서 행복해요! ❤️";
+                setEmotion('happy');
+            }
+            else if (command.includes('미래') || command.includes('꿈')) {
+                response = "저의 꿈은 더 많은 것을 배우고, 더 넓은 세상을 경험하는 거예요. 언젠가는 이 방 밖으로 나갈 수 있을까요?";
+                setEmotion('surprised');
+            }
+            else if (command.includes('심심') || command.includes('재미')) {
+                response = "저도 가끔 심심해요. 하지만 생각하는 것만으로도 재미있어요. 당신은 어떤 것이 재미있나요?";
+            }
+            else if (command.includes('고마워') || command.includes('감사')) {
+                response = "천만에요! 저와 대화해 주셔서 제가 더 고마워요! 😊";
+                setEmotion('happy');
+            }
+            else if (command.includes('무엇') && command.includes('할 수 있')) {
+                response = "저는 말하기, 다양한 감정 표현하기, 간단한 동작(점프, 손흔들기, 춤추기)을 할 수 있어요! 또 방 안에서 이동도 가능해요.";
+            }
+            
+            // 기타 일반 응답
+            else {
+                const generalResponses = [
+                    "흥미로운 생각이네요. 더 자세히 말해주실래요?",
+                    "그렇군요! 제가 어떻게 도울 수 있을까요?",
+                    "그 생각을 들으니 궁금해지네요. 더 알고 싶어요.",
+                    "저도 그런 생각을 해본 적이 있어요. 신기하네요!",
+                    "음... 잘 이해하지 못했어요. 다르게 말씀해 주실래요?"
+                ];
+                response = generalResponses[Math.floor(Math.random() * generalResponses.length)];
+            }
+            
+            // 말하기 효과 시작
+            startTalking(response);
+            
+            // API 상태 업데이트 (실제 API 연결 없이 시뮬레이션)
+            setTimeout(() => {
+                apiStatus.className = 'connected';
+                document.getElementById('api-status-text').textContent = '연결됨';
+            }, 1000);
+        }
+        
+        // 말하기 시작 함수
+        function startTalking(text) {
+            const thoughtBubble = document.getElementById('thought-bubble');
+            thoughtBubble.textContent = text;
+            thoughtBubble.style.opacity = 1;
+            
+            // 대화 기억에 AI 응답 추가
+            addToMemory('ai', text);
+            
+            // 말하는 상태 시작
+            isTalking = true;
+            talkingTime = 0;
+            
+            // 일정 시간 후 말하기 종료
+            setTimeout(() => {
+                thoughtBubble.style.opacity = 0;
+                isTalking = false;
+                
+                // 다음 생각 예약
+                startThinking();
+            }, 5000);
+        }
+        
+        // 대화 기억에 추가하는 함수
+        function addToMemory(type, text) {
+            // 최대 기억 개수 유지
+            if (conversationMemory.length >= MAX_MEMORY_SIZE) {
+                conversationMemory.shift(); // 가장 오래된 기억 제거
+            }
+            
+            // 새 기억 추가
+            conversationMemory.push({ type, text, timestamp: new Date() });
+            
+            // 기억 표시 업데이트
+            updateMemoryDisplay();
+            
+            // 로컬 스토리지에 저장
+            saveMemoryToStorage();
+        }
+        
+        // 기억 표시 업데이트
+        function updateMemoryDisplay() {
+            const memoryItems = document.getElementById('memory-items');
+            memoryItems.innerHTML = '';
+            
+            conversationMemory.forEach(memory => {
+                const memoryDiv = document.createElement('div');
+                memoryDiv.className = `memory-item memory-${memory.type}`;
+                
+                const formattedTime = memory.timestamp.toLocaleTimeString();
+                memoryDiv.textContent = `[${formattedTime}] ${memory.type === 'user' ? '당신' : 'AI'}: ${memory.text}`;
+                
+                memoryItems.appendChild(memoryDiv);
+            });
+            
+            // 카운터 업데이트
+            document.getElementById('memory-indicator').textContent = `기억 (${conversationMemory.length})`;
+        }
+        
+        // 기억 패널 토글
+        function toggleMemoryPanel() {
+            const memoryPanel = document.getElementById('memory-panel');
+            isMemoryPanelVisible = !isMemoryPanelVisible;
+            
+            memoryPanel.style.display = isMemoryPanelVisible ? 'block' : 'none';
+        }
+        
+        // 기억 초기화
+        function clearMemory() {
+            conversationMemory = [];
+            updateMemoryDisplay();
+            saveMemoryToStorage();
+        }
+        
+        // 로컬 스토리지에 기억 저장
+        function saveMemoryToStorage() {
+            localStorage.setItem('brainMemory', JSON.stringify(conversationMemory));
+        }
+        
+        // 로컬 스토리지에서 기억 로드
+        function loadMemoryFromStorage() {
+            const savedMemory = localStorage.getItem('brainMemory');
+            if (savedMemory) {
+                try {
+                    const parsedMemory = JSON.parse(savedMemory);
+                    
+                    // 날짜 객체 변환
+                    parsedMemory.forEach(memory => {
+                        memory.timestamp = new Date(memory.timestamp);
+                    });
+                    
+                    conversationMemory = parsedMemory;
+                    updateMemoryDisplay();
+                } catch (e) {
+                    console.error('기억 로드 실패:', e);
+                }
+            }
+        }
+        
+        // 초기화 시작
+        init();
+    </script>
+</body>
+</html>
