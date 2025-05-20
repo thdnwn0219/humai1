@@ -1,0 +1,1071 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VeoAI Chatbot</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #6a45ec;
+            --primary-dark: #5035be;
+            --secondary: #10b981;
+            --yellow: #f59e0b;
+            --pink: #ec4899;
+            --blue: #3b82f6;
+            --dark: #0f172a;
+            --darker: #020617;
+            --light: #f8fafc;
+            --gray: #64748b;
+            --light-gray: #cbd5e1;
+            --shadow-color: rgba(0, 0, 0, 0.08);
+            --glass: rgba(255, 255, 255, 0.08);
+            --transition-bezier: cubic-bezier(0.16, 1, 0.3, 1);
+            --font-stack: 'Inter', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+            --kakao-yellow: #fee500;
+            --kakao-brown: #3c1e1e;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: var(--font-stack);
+        }
+
+        body {
+            background: var(--darker);
+            color: var(--light);
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* Loader */
+        .loading-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--darker);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            transition: opacity 0.8s var(--transition-bezier), 
+                        transform 1.2s var(--transition-bezier);
+        }
+
+        .loading-screen.hidden {
+            opacity: 0;
+            transform: scale(1.2);
+            pointer-events: none;
+        }
+
+        .logo-container {
+            position: relative;
+            width: 80px;
+            height: 80px;
+        }
+
+        .logo {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            fill: var(--primary);
+            animation: pulse 1.5s var(--transition-bezier) infinite alternate;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(0.95); opacity: 0.8; }
+            100% { transform: scale(1.05); opacity: 1; }
+        }
+
+        .loading-bar {
+            margin-top: 20px;
+            width: 160px;
+            height: 3px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .loading-progress {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, var(--primary), var(--secondary));
+            animation: loading-progress 2s var(--transition-bezier) forwards;
+        }
+
+        @keyframes loading-progress {
+            0% { width: 0%; }
+            50% { width: 40%; }
+            100% { width: 100%; }
+        }
+
+        /* Main Chat Interface */
+        .chat-container {
+            width: 90%;
+            max-width: 1100px;
+            height: 90vh;
+            background: var(--dark);
+            border-radius: 20px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: opacity 1s var(--transition-bezier), 
+                        transform 1s var(--transition-bezier);
+        }
+
+        .chat-container.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .chat-header {
+            padding: 22px 24px;
+            background: rgba(0, 0, 0, 0.15);
+            backdrop-filter: blur(10px);
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            position: relative;
+            z-index: 1;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .chat-header-logo {
+            width: 32px;
+            height: 32px;
+        }
+
+        .chat-header-logo svg {
+            fill: var(--primary);
+        }
+
+        .chat-header-text h1 {
+            font-size: 1.4rem;
+            font-weight: 600;
+            letter-spacing: -0.5px;
+            background: linear-gradient(90deg, var(--light), var(--light-gray));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .chat-header-text p {
+            font-size: 0.85rem;
+            color: var(--gray);
+            margin-top: 2px;
+        }
+
+        .chat-body {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .chat-messages {
+            flex: 1;
+            padding: 24px;
+            overflow-y: auto;
+            scroll-behavior: smooth;
+            display: flex;
+            flex-direction: column;
+            gap: 22px;
+        }
+
+        .message {
+            display: flex;
+            gap: 14px;
+            max-width: 90%;
+            animation: message-appear 0.5s var(--transition-bezier) forwards;
+            opacity: 0;
+            transform: translateY(10px);
+        }
+
+        @keyframes message-appear {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message.user {
+            align-self: flex-end;
+            flex-direction: row-reverse;
+        }
+
+        .message-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 12px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: 600;
+            font-size: 14px;
+            flex-shrink: 0;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            box-shadow: 0 4px 12px rgba(106, 69, 236, 0.25);
+            transition: transform 0.2s var(--transition-bezier);
+        }
+
+        .message.user .message-avatar {
+            background: linear-gradient(135deg, var(--secondary), #0d9488);
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
+        }
+
+        .message:hover .message-avatar {
+            transform: scale(1.05);
+        }
+
+        .message-content {
+            background: var(--glass);
+            backdrop-filter: blur(10px);
+            padding: 14px 18px;
+            border-radius: 16px;
+            line-height: 1.6;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.07);
+            position: relative;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .message.user .message-content {
+            background: rgba(16, 185, 129, 0.12);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+        }
+
+        .message.loading .message-content {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 80px;
+            min-height: 44px;
+        }
+
+        .typing-indicator {
+            display: flex;
+            gap: 6px;
+        }
+
+        .typing-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--primary);
+            border-radius: 50%;
+            opacity: 0.8;
+        }
+
+        .typing-dot:nth-child(1) {
+            animation: typing 1.4s infinite 0s;
+        }
+
+        .typing-dot:nth-child(2) {
+            animation: typing 1.4s infinite 0.2s;
+        }
+
+        .typing-dot:nth-child(3) {
+            animation: typing 1.4s infinite 0.4s;
+        }
+
+        @keyframes typing {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-5px); }
+        }
+
+        .message-time {
+            font-size: 0.75rem;
+            color: var(--gray);
+            margin-top: 4px;
+            opacity: 0.8;
+        }
+
+        /* Input Area */
+        .chat-input-container {
+            padding: 18px 24px 24px;
+            position: relative;
+        }
+
+        .chat-input-bg {
+            background: rgba(0, 0, 0, 0.2);
+            backdrop-filter: blur(10px);
+            border-radius: 18px;
+            padding: 4px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            display: flex;
+            align-items: center;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+            transition: border-color 0.3s var(--transition-bezier),
+                        box-shadow 0.3s var(--transition-bezier);
+        }
+
+        .chat-input-bg:focus-within {
+            border-color: rgba(106, 69, 236, 0.3);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15), 
+                        0 0 0 2px rgba(106, 69, 236, 0.15);
+        }
+
+        .chat-input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            padding: 12px 16px;
+            color: var(--light);
+            font-size: 1rem;
+            outline: none;
+            resize: none;
+            max-height: 120px;
+            min-height: 48px;
+            line-height: 1.5;
+        }
+
+        .chat-input::placeholder {
+            color: var(--gray);
+        }
+
+        .chat-input-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-right: 4px;
+        }
+
+        .upload-image-btn {
+            background: transparent;
+            border: none;
+            border-radius: 12px;
+            width: 36px;
+            height: 36px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            color: var(--gray);
+            transition: all 0.2s var(--transition-bezier);
+            position: relative;
+        }
+
+        .upload-image-btn:hover {
+            color: var(--light);
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .file-input {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        .send-button {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            border: none;
+            border-radius: 14px;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            transition: transform 0.2s var(--transition-bezier), 
+                        box-shadow 0.2s var(--transition-bezier);
+            box-shadow: 0 4px 12px rgba(106, 69, 236, 0.2);
+        }
+
+        .send-button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 6px 16px rgba(106, 69, 236, 0.3);
+        }
+
+        .send-button:active {
+            transform: scale(0.95);
+        }
+
+        .send-button.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Style Settings */
+        .style-settings {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 90%;
+            max-width: 500px;
+            background: var(--dark);
+            border-radius: 20px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+            z-index: 100;
+            padding: 24px;
+            display: none;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .style-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .style-title {
+            font-size: 1.4rem;
+            font-weight: 600;
+        }
+
+        .style-close {
+            background: transparent;
+            border: none;
+            color: var(--gray);
+            font-size: 1.8rem;
+            cursor: pointer;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border-radius: 50%;
+            transition: all 0.2s var(--transition-bezier);
+        }
+
+        .style-close:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--light);
+        }
+
+        .style-option {
+            margin-bottom: 20px;
+        }
+
+        .style-label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: var(--light);
+        }
+
+        .style-select {
+            width: 100%;
+            padding: 12px 16px;
+            border-radius: 12px;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: var(--light);
+            font-size: 1rem;
+            outline: none;
+            transition: all 0.3s var(--transition-bezier);
+        }
+
+        .style-select:focus {
+            border-color: var(--primary);
+        }
+
+        .style-description {
+            font-size: 0.85rem;
+            color: var(--gray);
+            margin-top: 8px;
+        }
+
+        .upload-container {
+            border: 2px dashed rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 24px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s var(--transition-bezier);
+        }
+
+        .upload-container:hover {
+            border-color: var(--primary);
+            background: rgba(106, 69, 236, 0.05);
+        }
+
+        .upload-icon {
+            font-size: 2rem;
+            margin-bottom: 12px;
+        }
+
+        .upload-text {
+            color: var(--gray);
+            font-size: 0.9rem;
+        }
+
+        .style-img-preview {
+            width: 100%;
+            max-height: 200px;
+            object-fit: contain;
+            border-radius: 12px;
+            margin-top: 16px;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .btn-analyze {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            border: none;
+            border-radius: 12px;
+            color: white;
+            font-weight: 600;
+            font-size: 1rem;
+            cursor: pointer;
+            margin-top: 16px;
+            transition: all 0.2s var(--transition-bezier);
+        }
+
+        .btn-analyze:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(106, 69, 236, 0.3);
+        }
+
+        .kakao-style-label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: var(--kakao-yellow);
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        /* Settings Button */
+        .settings-button {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            border: none;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            color: white;
+            box-shadow: 0 4px 12px rgba(106, 69, 236, 0.25);
+            transition: transform 0.2s var(--transition-bezier),
+                        box-shadow 0.2s var(--transition-bezier);
+            z-index: 10;
+        }
+
+        .settings-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(106, 69, 236, 0.35);
+        }
+
+        /* Scrollbar styling */
+        .chat-messages::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .chat-messages::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .chat-messages::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+
+        .chat-messages::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        /* Button ripple effect */
+        .ripple {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            transform: scale(0);
+            animation: ripple 0.6s var(--transition-bezier);
+            pointer-events: none;
+        }
+
+        @keyframes ripple {
+            to {
+                transform: scale(4);
+                opacity: 0;
+            }
+        }
+
+        /* Responsive design */
+        @media (max-width: 768px) {
+            .chat-container {
+                width: 95%;
+                height: 95vh;
+                border-radius: 16px;
+            }
+
+            .message {
+                max-width: 95%;
+            }
+
+            .chat-header-text h1 {
+                font-size: 1.2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Loading Screen -->
+    <div class="loading-screen">
+        <div class="logo-container">
+            <svg class="logo" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+                <path d="M100,10 L120,80 L190,80 L130,120 L150,190 L100,150 L50,190 L70,120 L10,80 L80,80 Z" />
+            </svg>
+        </div>
+        <div class="loading-bar">
+            <div class="loading-progress"></div>
+        </div>
+    </div>
+
+    <!-- Main Chat Interface -->
+    <div class="chat-container">
+        <div class="chat-header">
+            <div class="chat-header-logo">
+                <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M100,10 L120,80 L190,80 L130,120 L150,190 L100,150 L50,190 L70,120 L10,80 L80,80 Z" />
+                </svg>
+            </div>
+            <div class="chat-header-text">
+                <h1>VeoAI Chatbot</h1>
+                <p>Powered by Groq • Llama-4-Scout</p>
+            </div>
+        </div>
+        
+        <div class="chat-body">
+            <div class="chat-messages">
+                <div class="message">
+                    <div class="message-avatar">V</div>
+                    <div class="message-content">
+                        안녕하세요! VeoAI 챗봇입니다. 무엇을 도와드릴까요?
+                    </div>
+                </div>
+            </div>
+            
+            <div class="chat-input-container">
+                <div class="chat-input-bg">
+                    <textarea class="chat-input" placeholder="메시지를 입력하세요..." id="userInput" rows="1"></textarea>
+                    <div class="chat-input-actions">
+                        <button class="upload-image-btn" id="imageBtn" title="이미지 업로드">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                                <circle cx="8.5" cy="8.5" r="1.5"/>
+                                <polyline points="21 15 16 10 5 21"/>
+                            </svg>
+                            <input type="file" id="imageUpload" class="file-input" accept="image/*" />
+                        </button>
+                        <button class="send-button" id="sendButton">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M22 2L11 13" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                <path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Style Settings Panel -->
+    <div class="style-settings" id="styleSettings">
+        <div class="style-header">
+            <div class="style-title">대화 스타일 설정</div>
+            <button class="style-close" id="closeSettings">&times;</button>
+        </div>
+        
+        <div class="style-option">
+            <label class="style-label">카카오톡 스타일 분석</label>
+            <div class="upload-container" id="kakaoUploadContainer">
+                <div class="upload-icon">📷</div>
+                <div class="upload-text">카톡 스크린샷을 업로드하세요</div>
+                <input type="file" id="kakaoStyleUpload" class="file-input" accept="image/*">
+            </div>
+            <img id="kakaoPreview" class="style-img-preview hidden" src="#" alt="카톡 미리보기">
+            <div id="analyzeResult" class="style-description hidden">
+                <div class="kakao-style-label">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
+                    </svg>
+                    카톡 스타일 활성화됨
+                </div>
+                <span id="styleDescription"></span>
+            </div>
+            <button id="analyzeBtn" class="btn-analyze hidden">스타일 분석하기</button>
+        </div>
+        
+        <div class="style-option">
+            <label class="style-label">AI 말투 스타일</label>
+            <select class="style-select" id="toneSelect">
+                <option value="normal">기본 (비서형)</option>
+                <option value="friendly">친근한 (친구형)</option>
+                <option value="professional">전문적인 (교수형)</option>
+                <option value="cute">귀여운 (애교형)</option>
+                <option value="kakao">카카오톡 스타일 (분석 기반)</option>
+            </select>
+            <div class="style-description">AI의 답변 말투를 선택하세요</div>
+        </div>
+    </div>
+
+    <!-- Settings Button -->
+    <button class="settings-button" id="settingsBtn">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+        </svg>
+    </button>
+
+    <script>
+        // Configuration
+        const GROQ_API_KEY = "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";
+        const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
+        const MODEL = "meta-llama/llama-4-scout-17b-16e-instruct";
+        
+        // Chat history
+        const chatHistory = [
+            {"role": "system", "content": "당신은 도움이 되는 한국어 AI 어시스턴트입니다."}
+        ];
+
+        // App state
+        const appState = {
+            kakaoStyleActive: false,
+            kakaoStyleDescription: "",
+            currentTone: "normal",
+            uploadedImage: null
+        };
+
+        // Tone templates
+const toneTemplates = {
+    normal: "당신은 도움이 되는 한국어 AI 어시스턴트입니다.",
+    friendly: "당신은 친근하고 편안한 말투를 쓰는 AI 친구입니다. 반말을 사용하고 이모티콘을 자주 써요! 😊",
+    professional: "당신은 전문적이고 격식있는 한국어를 사용하는 AI 전문가입니다. 명확하고 깔끔한 설명과 존댓말을 사용합니다.",
+    cute: "당신은 귀엽고 애교 넘치는 말투의 AI 어시스턴트예요~! 말끝에 '~'를 자주 붙이고 🌟✨ 같은 이모티콘을 많이 사용해요! 💖",
+    kakao: "" // 카카오톡 스타일 분석 후 동적으로 설정됨
+};
+
+// DOM Elements
+const loadingScreen = document.querySelector('.loading-screen');
+const chatContainer = document.querySelector('.chat-container');
+const chatMessages = document.querySelector('.chat-messages');
+const userInput = document.getElementById('userInput');
+const sendButton = document.getElementById('sendButton');
+const imageUpload = document.getElementById('imageUpload');
+const settingsBtn = document.getElementById('settingsBtn');
+const styleSettings = document.getElementById('styleSettings');
+const closeSettings = document.getElementById('closeSettings');
+const toneSelect = document.getElementById('toneSelect');
+const kakaoUploadContainer = document.getElementById('kakaoUploadContainer');
+const kakaoStyleUpload = document.getElementById('kakaoStyleUpload');
+const kakaoPreview = document.getElementById('kakaoPreview');
+const analyzeBtn = document.getElementById('analyzeBtn');
+const analyzeResult = document.getElementById('analyzeResult');
+const styleDescription = document.getElementById('styleDescription');
+
+// Initialize the app
+document.addEventListener('DOMContentLoaded', () => {
+    // Show chat interface after loading
+    setTimeout(() => {
+        loadingScreen.classList.add('hidden');
+        chatContainer.classList.add('visible');
+    }, 2000);
+    
+    // Auto-resize textarea
+    userInput.addEventListener('input', () => {
+        userInput.style.height = 'auto';
+        userInput.style.height = (userInput.scrollHeight) + 'px';
+    });
+    
+    // Send message on enter key (shift+enter for new line)
+    userInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+        }
+    });
+    
+    // Send button click
+    sendButton.addEventListener('click', sendMessage);
+    
+    // Image upload handler
+    imageUpload.addEventListener('change', handleImageUpload);
+    
+    // Settings button click
+    settingsBtn.addEventListener('click', () => {
+        styleSettings.style.display = 'block';
+    });
+    
+    // Close settings
+    closeSettings.addEventListener('click', () => {
+        styleSettings.style.display = 'none';
+    });
+    
+    // Tone selection
+    toneSelect.addEventListener('change', (e) => {
+        appState.currentTone = e.target.value;
+        updateSystemPrompt();
+    });
+    
+    // Kakao style upload
+    kakaoUploadContainer.addEventListener('click', () => {
+        kakaoStyleUpload.click();
+    });
+    
+    kakaoStyleUpload.addEventListener('change', (e) => {
+        if (e.target.files && e.target.files[0]) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                kakaoPreview.src = e.target.result;
+                kakaoPreview.classList.remove('hidden');
+                analyzeBtn.classList.remove('hidden');
+                kakaoUploadContainer.style.display = 'none';
+            };
+            reader.readAsDataURL(e.target.files[0]);
+        }
+    });
+    
+    // Analyze kakao style
+    analyzeBtn.addEventListener('click', analyzeKakaoStyle);
+    
+    // Add ripple effect to buttons
+    document.querySelectorAll('.send-button, .settings-button').forEach(button => {
+        button.addEventListener('click', createRipple);
+    });
+});
+
+// Create ripple effect
+function createRipple(event) {
+    const button = event.currentTarget;
+    const ripple = document.createElement('span');
+    
+    const diameter = Math.max(button.clientWidth, button.clientHeight);
+    const radius = diameter / 2;
+    
+    ripple.style.width = ripple.style.height = `${diameter}px`;
+    ripple.style.left = `${event.clientX - button.getBoundingClientRect().left - radius}px`;
+    ripple.style.top = `${event.clientY - button.getBoundingClientRect().top - radius}px`;
+    ripple.classList.add('ripple');
+    
+    const rippleContainer = button;
+    
+    if (rippleContainer.getElementsByClassName('ripple')[0]) {
+        rippleContainer.removeChild(rippleContainer.getElementsByClassName('ripple')[0]);
+    }
+    
+    rippleContainer.appendChild(ripple);
+    
+    setTimeout(() => {
+        ripple.remove();
+    }, 600);
+}
+
+// Update system prompt based on selected tone
+function updateSystemPrompt() {
+    const newSystemPrompt = toneTemplates[appState.currentTone];
+    
+    // Find and update the system message in chat history
+    const systemMessageIndex = chatHistory.findIndex(msg => msg.role === 'system');
+    if (systemMessageIndex !== -1) {
+        chatHistory[systemMessageIndex].content = newSystemPrompt;
+    } else {
+        chatHistory.unshift({ role: 'system', content: newSystemPrompt });
+    }
+}
+
+// Analyze Kakao style
+async function analyzeKakaoStyle() {
+    // In a real app, you would send the image to a vision model for analysis
+    // Here we'll simulate the analysis with a predefined style
+    
+    // Show loading state
+    analyzeBtn.textContent = '분석 중...';
+    analyzeBtn.disabled = true;
+    
+    // Simulate API call delay
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    
+    // Set kakao style (in reality this would come from AI analysis)
+    const kakaoStylePrompt = "당신은 카카오톡에서 대화하는 것처럼 행동하세요. 짧은 문장을 사용하고, 'ㅋㅋㅋ', 'ㅎㅎ' 같은 웃음 표현과 '진짜?', '대박' 같은 구어체를 자주 사용하세요. 이모티콘이나 이모지도 적절히 활용하세요.";
+    appState.kakaoStyleDescription = "친구와 대화하는 카카오톡 스타일로 짧고 친근한 대화체를 사용합니다. 웃음소리(ㅋㅋ, ㅎㅎ)와 이모티콘을 활용합니다.";
+    
+    // Update UI
+    toneTemplates.kakao = kakaoStylePrompt;
+    styleDescription.textContent = appState.kakaoStyleDescription;
+    analyzeResult.classList.remove('hidden');
+    analyzeBtn.classList.add('hidden');
+    
+    // Auto select kakao style
+    toneSelect.value = 'kakao';
+    appState.currentTone = 'kakao';
+    updateSystemPrompt();
+}
+
+// Handle image upload
+function handleImageUpload(e) {
+    if (e.target.files && e.target.files[0]) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            appState.uploadedImage = e.target.result;
+            // Add a preview in the chat (for image chat)
+            addUserMessage('이미지를 분석해주세요', true);
+            sendToAI();
+        };
+        reader.readAsDataURL(e.target.files[0]);
+    }
+}
+
+// Add message to chat UI
+function addMessage(role, content, isLoading = false) {
+    const messageDiv = document.createElement('div');
+    messageDiv.classList.add('message');
+    
+    if (role === 'user') {
+        messageDiv.classList.add('user');
+    }
+    
+    if (isLoading) {
+        messageDiv.classList.add('loading');
+    }
+    
+    const now = new Date();
+    const timeString = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+    
+    const avatar = role === 'user' ? '나' : 'V';
+    
+    messageDiv.innerHTML = `
+        <div class="message-avatar">${avatar}</div>
+        <div class="message-content">
+            ${isLoading ? '<div class="typing-indicator"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div>' : content}
+            <div class="message-time">${timeString}</div>
+        </div>
+    `;
+    
+    chatMessages.appendChild(messageDiv);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+    
+    return messageDiv;
+}
+
+// Add user message to UI and history
+function addUserMessage(message, hasImage = false) {
+    let content = message;
+    
+    if (hasImage && appState.uploadedImage) {
+        content += `<br><img src="${appState.uploadedImage}" style="max-width: 200px; max-height: 200px; border-radius: 8px; margin-top: 8px;" />`;
+    }
+    
+    addMessage('user', content);
+    
+    chatHistory.push({
+        role: 'user',
+        content: message
+    });
+}
+
+// Add AI response to UI and history
+function addAIResponse(response) {
+    const loadingMessage = addMessage('assistant', '', true);
+    
+    // Simulate typing effect
+    let i = 0;
+    const responseText = response.trim();
+    const typingSpeed = 20; // ms per character
+    
+    setTimeout(() => {
+        const typingInterval = setInterval(() => {
+            if (i < responseText.length) {
+                loadingMessage.classList.remove('loading');
+                loadingMessage.querySelector('.message-content').innerHTML = responseText.substring(0, i + 1) + '<span class="cursor">|</span>' + `<div class="message-time">${loadingMessage.querySelector('.message-time').textContent}</div>`;
+                i++;
+            } else {
+                clearInterval(typingInterval);
+                loadingMessage.querySelector('.message-content').innerHTML = responseText + `<div class="message-time">${loadingMessage.querySelector('.message-time').textContent}</div>`;
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }
+        }, typingSpeed);
+    }, 500);
+    
+    chatHistory.push({
+        role: 'assistant',
+        content: response
+    });
+}
+
+// Send message to AI API
+async function sendToAI() {
+    try {
+        // Prepare request
+        const response = await fetch(GROQ_API_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${GROQ_API_KEY}`
+            },
+            body: JSON.stringify({
+                model: MODEL,
+                messages: chatHistory,
+                temperature: 0.7,
+                max_tokens: 800
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`API request failed with status ${response.status}`);
+        }
+        
+        const data = await response.json();
+        const aiResponse = data.choices[0].message.content;
+        
+        // Reset image after processing
+        appState.uploadedImage = null;
+        
+        // Add AI response to chat
+        addAIResponse(aiResponse);
+        
+    } catch (error) {
+        console.error('Error sending message to AI:', error);
+        addAIResponse('죄송합니다. 오류가 발생했습니다. 다시 시도해주세요.');
+    }
+}
+
+// Send message handler
+function sendMessage() {
+    const message = userInput.value.trim();
+    
+    if (message === '') return;
+    
+    // Add user message to chat
+    addUserMessage(message, false);
+    
+    // Clear input
+    userInput.value = '';
+    userInput.style.height = 'auto';
+    
+    // Send to AI
+    sendToAI();
+}
+</script>
+</body>
+</html>
