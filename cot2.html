@@ -334,6 +334,10 @@
             line-height: 1.5;
         }
 
+        .visible-settings {
+            display: block !important;
+        }
+
         .chat-input::placeholder {
             color: var(--gray);
         }
@@ -814,7 +818,13 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Settings button click
     settingsBtn.addEventListener('click', () => {
+    // 기존 코드에서는 DOM 스타일을 직접 조작했지만, 
+    // CSS에 설정된 display: none을 명확하게 block으로 변경합니다
         styleSettings.style.display = 'block';
+    
+    // 설정 패널이 제대로 표시되도록 위치와 z-index 확인
+        styleSettings.style.zIndex = '100';
+        styleSettings.style.opacity = '1';
     });
     
     // Close settings
