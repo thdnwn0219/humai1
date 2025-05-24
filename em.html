@@ -173,6 +173,18 @@
             border-color: rgba(76, 175, 80, 0.8);
         }
         
+        /* 플레이 모드에서 영역을 숨기는 스타일 */
+        .play-mode .clickable-area {
+            background: transparent !important;
+            border: none !important;
+            color: transparent !important;
+        }
+        
+        .play-mode .clickable-area:hover {
+            background: rgba(255, 255, 255, 0.1) !important;
+            transform: none !important;
+        }
+        
         .popup-overlay {
             position: fixed;
             top: 0;
@@ -345,6 +357,26 @@
         
         .play-controls {
             margin-bottom: 30px;
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        
+        .back-btn {
+            background: linear-gradient(45deg, #6c757d, #495057);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: all 0.3s ease;
+        }
+        
+        .back-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
         }
         
         .status-message {
@@ -469,7 +501,8 @@
         <div class="tab-content" id="playTab">
             <div class="play-mode">
                 <div class="play-controls">
-                    <button class="btn" onclick="switchTab('setup')">🛠️ 설정으로 돌아가기</button>
+                    <button class="back-btn" onclick="switchTab('setup')">🛠️ 설정으로 돌아가기</button>
+                    <button class="btn" onclick="resetToMainImage()" id="resetBtn" style="display: none;">🏠 원본 이미지로 돌아가기</button>
                 </div>
                 
                 <div id="playImageDisplay" style="text-align: center;">
@@ -509,6 +542,7 @@
         let areaCounter = 0;
         let selectedImageForMapping = null;
         let currentMappingAreaId = null;
+        let originalMainImageSrc = null; // 원본 메인 이미지 저장
 
         document.getElementById('mainImage').addEventListener('change', loadMainImage);
         document.getElementById('popupImages').addEventListener('change', loadPopupImages);
@@ -533,6 +567,7 @@
                 const reader = new FileReader();
                 reader.onload = function(e) {
                     displayMainImage(e.target.result);
+                    originalMainImageSrc = e.target.result; // 원본 이미지 저장
                 };
                 reader.readAsDataURL(file);
             }
@@ -654,7 +689,13 @@
             area.addEventListener('click', function(e) {
                 e.stopPropagation();
                 if (!isAreaSelectionMode) {
-                    showMappedImage(areaData.id);
+                    // 설정 모드에서는 팝업으로, 플레이 모드에서는 이미지 전환으로
+                    const isPlayMode = document.getElementById('playTab').classList.contains('active');
+                    if (isPlayMode) {
+                        switchToMappedImage(areaData.id);
+                    } else {
+                        showMappedImage(areaData.id);
+                    }
                 }
             });
             
@@ -683,6 +724,46 @@
                 }
             } else {
                 showStatusMessage('이 영역에 매핑된 이미지가 없습니다.', 'warning');
+            }
+        }
+
+        // 플레이 모드에서 이미지 전환 함수
+        function switchToMappedImage(areaId) {
+            const area = clickableAreas.find(a => a.id === areaId);
+            if (area && area.mappedImageId) {
+                const image = popupImages.find(img => img.id === area.mappedImageId);
+                if (image) {
+                    const playImg = document.getElementById('playMainImg');
+                    if (playImg) {
+                        playImg.style.transition = 'opacity 0.3s ease';
+                        playImg.style.opacity = '0';
+                        
+                        setTimeout(() => {
+                            playImg.src = image.src;
+                            playImg.onload = function() {
+                                playImg.style.opacity = '1';
+                                document.getElementById('resetBtn').style.display = 'inline-block';
+                            };
+                        }, 150);
+                    }
+                }
+            }
+        }
+
+        // 원본 이미지로 돌아가기
+        function resetToMainImage() {
+            const playImg = document.getElementById('playMainImg');
+            if (playImg && originalMainImageSrc) {
+                playImg.style.transition = 'opacity 0.3s ease';
+                playImg.style.opacity = '0';
+                
+                setTimeout(() => {
+                    playImg.src = originalMainImageSrc;
+                    playImg.onload = function() {
+                        playImg.style.opacity = '1';
+                        document.getElementById('resetBtn').style.display = 'none';
+                    };
+                }, 150);
             }
         }
 
@@ -756,11 +837,8 @@
                                 <strong>영역 ${area.id.split('_')[1]}</strong><br>
                                 위치: (${Math.round(area.x)}, ${Math.round(area.y)})<br>
                                 ${mappedImage ? `매핑된 이미지: ${mappedImage.name}` : '매핑된 이미지 없음'}
-                            </div>
                             <div class="area-actions">
-                                <button class="map-btn" onclick="openMappingModal('${area.id}')">
-                                    ${area.mappedImageId ? '재매핑' : '매핑'}
-                                </button>
+                                <button class="map-btn" onclick="openMappingModal('${area.id}')">이미지 매핑</button>
                                 <button class="delete-btn" onclick="deleteArea('${area.id}')">삭제</button>
                             </div>
                         </div>
@@ -772,64 +850,118 @@
         }
 
         function deleteArea(areaId) {
-            const area = document.getElementById(areaId);
-            if (area) {
-                area.remove();
+            clickableAreas = clickableAreas.filter(area => area.id !== areaId);
+            const areaElement = document.getElementById(areaId);
+            if (areaElement) {
+                areaElement.remove();
             }
-            clickableAreas = clickableAreas.filter(a => a.id !== areaId);
             updateAreasList();
             showStatusMessage('영역이 삭제되었습니다.', 'success');
         }
 
         function clearAllAreas() {
-            const areas = document.querySelectorAll('.clickable-area');
-            areas.forEach(area => area.remove());
-            clickableAreas = [];
-            updateAreasList();
-            showStatusMessage('모든 클릭 영역이 제거되었습니다.', 'success');
+            if (clickableAreas.length === 0) {
+                showStatusMessage('삭제할 영역이 없습니다.', 'warning');
+                return;
+            }
+            
+            if (confirm('모든 클릭 영역을 삭제하시겠습니까?')) {
+                clickableAreas = [];
+                const container = document.getElementById('imageContainer');
+                const areas = container.querySelectorAll('.clickable-area');
+                areas.forEach(area => area.remove());
+                updateAreasList();
+                showStatusMessage('모든 영역이 삭제되었습니다.', 'success');
+            }
+        }
+
+        function resetImages() {
+            if (confirm('모든 이미지와 설정을 초기화하시겠습니까?')) {
+                mainImageElement = null;
+                popupImages = [];
+                clickableAreas = [];
+                areaCounter = 0;
+                originalMainImageSrc = null;
+                
+                document.getElementById('mainImage').value = '';
+                document.getElementById('popupImages').value = '';
+                document.getElementById('imageDisplay').innerHTML = '<p style="color: #6c757d; font-style: italic;">메인 이미지를 선택해주세요</p>';
+                document.getElementById('imagesSection').style.display = 'none';
+                document.getElementById('areasList').style.display = 'none';
+                document.getElementById('playImageDisplay').innerHTML = '<p style="color: #6c757d; font-style: italic;">설정 모드에서 메인 이미지와 영역을 설정해주세요</p>';
+                
+                showStatusMessage('모든 설정이 초기화되었습니다.', 'success');
+            }
         }
 
         function setupPlayMode() {
             const playDisplay = document.getElementById('playImageDisplay');
             
-            if (mainImageElement && clickableAreas.length > 0) {
-                const mainImgSrc = mainImageElement.src;
+            if (mainImageElement && originalMainImageSrc) {
                 playDisplay.innerHTML = `
-                    <div class="image-container" id="playImageContainer">
-                        <img class="main-image" id="playMainImg" src="${mainImgSrc}" alt="Main Image">
+                    <div class="image-container play-mode" id="playImageContainer">
+                        <img class="main-image" id="playMainImg" src="${originalMainImageSrc}" alt="Play Image">
                     </div>
                 `;
                 
                 const playImg = document.getElementById('playMainImg');
                 playImg.onload = function() {
-                    setupPlayAreas();
+                    setupPlayModeAreas();
                 };
+                
+                document.getElementById('resetBtn').style.display = 'none';
             } else {
                 playDisplay.innerHTML = '<p style="color: #6c757d; font-style: italic;">설정 모드에서 메인 이미지와 영역을 설정해주세요</p>';
             }
         }
 
-        function setupPlayAreas() {
+        function setupPlayModeAreas() {
             const container = document.getElementById('playImageContainer');
+            if (!container) return;
             
+            // 기존 영역들 제거
+            const existingAreas = container.querySelectorAll('.clickable-area');
+            existingAreas.forEach(area => area.remove());
+            
+            // 플레이 모드용 영역들 생성
             clickableAreas.forEach(areaData => {
-                if (areaData.mappedImageId) {
-                    const area = document.createElement('div');
-                    area.className = 'clickable-area mapped';
-                    area.style.left = areaData.x - areaData.width/2 + 'px';
-                    area.style.top = areaData.y - areaData.height/2 + 'px';
-                    area.style.width = areaData.width + 'px';
-                    area.style.height = areaData.height + 'px';
-                    area.textContent = areaData.id.split('_')[1];
-                    
-                    area.addEventListener('click', function(e) {
-                        e.stopPropagation();
-                        showMappedImage(areaData.id);
-                    });
-                    
-                    container.appendChild(area);
-                }
+                const area = document.createElement('div');
+                area.className = 'clickable-area';
+                area.id = 'play_' + areaData.id;
+                area.style.left = areaData.x - areaData.width/2 + 'px';
+                area.style.top = areaData.y - areaData.height/2 + 'px';
+                area.style.width = areaData.width + 'px';
+                area.style.height = areaData.height + 'px';
+                
+                area.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    switchToMappedImage(areaData.id);
+                });
+                
+                container.appendChild(area);
             });
+        }
+
+        function closePopup() {
+            document.getElementById('popupOverlay').style.display = 'none';
+        }
+
+        function showStatusMessage(message, type) {
+            const statusDiv = document.createElement('div');
+            statusDiv.className = `status-message status-${type}`;
+            statusDiv.textContent = message;
+            
+            const container = document.querySelector('.container');
+            container.appendChild(statusDiv);
+            
+            setTimeout(() => {
+                statusDiv.style.opacity = '0';
+                setTimeout(() => {
+                    if (statusDiv.parentNode) {
+                        statusDiv.parentNode.removeChild(statusDiv);
+                    }
+                }, 300);
+            }, 3000);
         }
 
         function saveConfiguration() {
@@ -839,24 +971,23 @@
             }
             
             const config = {
-                mainImage: mainImageElement.src,
+                mainImage: originalMainImageSrc,
                 popupImages: popupImages,
                 clickableAreas: clickableAreas,
-                version: '1.0',
-                timestamp: new Date().toISOString()
+                areaCounter: areaCounter
             };
             
-            const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `interactive-viewer-config-${new Date().toISOString().split('T')[0]}.json`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+            const dataStr = JSON.stringify(config, null, 2);
+            const dataBlob = new Blob([dataStr], {type: 'application/json'});
+            const url = URL.createObjectURL(dataBlob);
             
-            showStatusMessage('설정이 성공적으로 저장되었습니다!', 'success');
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'image_viewer_config.json';
+            link.click();
+            
+            URL.revokeObjectURL(url);
+            showStatusMessage('설정이 저장되었습니다!', 'success');
         }
 
         function loadConfiguration(event) {
@@ -868,113 +999,61 @@
                 try {
                     const config = JSON.parse(e.target.result);
                     
-                    if (!config.version || !config.mainImage) {
-                        throw new Error('잘못된 설정 파일 형식입니다.');
+                    // 설정 복원
+                    if (config.mainImage) {
+                        displayMainImage(config.mainImage);
+                        originalMainImageSrc = config.mainImage;
                     }
                     
-                    // 메인 이미지 로드
-                    displayMainImage(config.mainImage);
+                    if (config.popupImages) {
+                        popupImages = config.popupImages;
+                        displayPopupImages();
+                    }
                     
-                    // 팝업 이미지들 로드
-                    popupImages = config.popupImages || [];
-                    displayPopupImages();
-                    
-                    // 클릭 영역들 로드
-                    clickableAreas = config.clickableAreas || [];
-                    areaCounter = Math.max(...clickableAreas.map(a => parseInt(a.id.split('_')[1])), 0);
-                    
-                    setTimeout(() => {
-                        redrawAreas();
-                        updateAreasList();
-                    }, 100);
+                    if (config.clickableAreas) {
+                        clickableAreas = config.clickableAreas;
+                        areaCounter = config.areaCounter || clickableAreas.length;
+                        
+                        setTimeout(() => {
+                            redrawAreas();
+                            updateAreasList();
+                        }, 100);
+                    }
                     
                     showStatusMessage('설정이 성공적으로 불러와졌습니다!', 'success');
-                    
                 } catch (error) {
-                    showStatusMessage('설정 파일을 불러오는데 실패했습니다: ' + error.message, 'error');
+                    showStatusMessage('설정 파일을 읽는 중 오류가 발생했습니다.', 'error');
+                    console.error('Config loading error:', error);
                 }
             };
             reader.readAsText(file);
-            
-            // 파일 입력 초기화
-            event.target.value = '';
         }
 
-        function resetImages() {
-            document.getElementById('imageDisplay').innerHTML = '<p style="color: #6c757d; font-style: italic;">메인 이미지를 선택해주세요</p>';
-            document.getElementById('playImageDisplay').innerHTML = '<p style="color: #6c757d; font-style: italic;">설정 모드에서 메인 이미지와 영역을 설정해주세요</p>';
-            document.getElementById('mainImage').value = '';
-            document.getElementById('popupImages').value = '';
-            document.getElementById('imagesSection').style.display = 'none';
-            
-            mainImageElement = null;
-            popupImages = [];
-            clearAllAreas();
-            isAreaSelectionMode = false;
-            
-            // 버튼 상태 초기화
-            const areaBtn = document.querySelector('[onclick="toggleAreaSelection()"]');
-            if (areaBtn) {
-                areaBtn.textContent = '클릭 영역 설정 모드';
-                areaBtn.style.background = 'linear-gradient(45deg, #4ecdc4, #44a08d)';
-            }
-            
-            showStatusMessage('모든 설정이 초기화되었습니다.', 'success');
-        }
-
-        function showStatusMessage(message, type) {
-            // 기존 메시지 제거
-            const existingMsg = document.querySelector('.status-message');
-            if (existingMsg) {
-                existingMsg.remove();
-            }
-            
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `status-message status-${type}`;
-            messageDiv.textContent = message;
-            
-            // 현재 활성 탭의 첫 번째 요소 뒤에 삽입
-            const activeTab = document.querySelector('.tab-content.active');
-            const firstChild = activeTab.firstElementChild;
-            activeTab.insertBefore(messageDiv, firstChild.nextSibling);
-            
-            // 3초 후 자동 제거
-            setTimeout(() => {
-                if (messageDiv.parentNode) {
-                    messageDiv.remove();
-                }
-            }, 3000);
-        }
-
-        function closePopup() {
-            document.getElementById('popupOverlay').style.display = 'none';
-        }
-
-        // 팝업 오버레이 클릭시 닫기
-        document.getElementById('popupOverlay').addEventListener('click', function(event) {
-            if (event.target === this) {
+        // 팝업 오버레이 클릭 시 닫기
+        document.getElementById('popupOverlay').addEventListener('click', function(e) {
+            if (e.target === this) {
                 closePopup();
             }
         });
 
-        // 매핑 모달 오버레이 클릭시 닫기
-        document.getElementById('mappingModal').addEventListener('click', function(event) {
-            if (event.target === this) {
+        // 매핑 모달 오버레이 클릭 시 닫기
+        document.getElementById('mappingModal').addEventListener('click', function(e) {
+            if (e.target === this) {
                 closeMappingModal();
             }
         });
 
-        // ESC 키로 팝업/모달 닫기
-        document.addEventListener('keydown', function(event) {
-            if (event.key === 'Escape') {
+        // ESC 키로 모달 닫기
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
                 closePopup();
                 closeMappingModal();
             }
         });
 
-        // 페이지 로드시 초기화
-        window.addEventListener('load', function() {
-            showStatusMessage('Interactive Image Viewer에 오신 것을 환영합니다!', 'success');
+        // 윈도우 리사이즈 시 영역 재배치
+        window.addEventListener('resize', function() {
+            setTimeout(redrawAreas, 100);
         });
     </script>
 </body>
