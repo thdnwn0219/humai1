@@ -1,0 +1,981 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Interactive Image Viewer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(45deg, #ff6b6b, #ee5a52);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            margin: 0;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .tabs {
+            display: flex;
+            background: #f8f9fa;
+            border-bottom: 1px solid #dee2e6;
+        }
+        
+        .tab {
+            flex: 1;
+            padding: 20px;
+            text-align: center;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s ease;
+            font-weight: bold;
+            font-size: 16px;
+        }
+        
+        .tab:hover {
+            background: #e9ecef;
+        }
+        
+        .tab.active {
+            background: white;
+            border-bottom-color: #ff6b6b;
+            color: #ff6b6b;
+        }
+        
+        .tab-content {
+            display: none;
+            padding: 20px;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .controls {
+            padding: 20px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #dee2e6;
+            margin-bottom: 20px;
+            border-radius: 10px;
+        }
+        
+        .file-input-group {
+            margin-bottom: 15px;
+        }
+        
+        .file-input-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #495057;
+        }
+        
+        .file-input {
+            width: 100%;
+            padding: 10px;
+            border: 2px dashed #dee2e6;
+            border-radius: 8px;
+            background: white;
+            transition: all 0.3s ease;
+        }
+        
+        .file-input:hover {
+            border-color: #ff6b6b;
+            background: #fff5f5;
+        }
+        
+        .btn {
+            background: linear-gradient(45deg, #4ecdc4, #44a08d);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        
+        .btn.danger {
+            background: linear-gradient(45deg, #ff6b6b, #ee5a52);
+        }
+        
+        .btn.success {
+            background: linear-gradient(45deg, #51cf66, #40c057);
+        }
+        
+        .image-container {
+            position: relative;
+            display: inline-block;
+            margin: 20px auto;
+            max-width: 100%;
+            text-align: center;
+        }
+        
+        .main-image {
+            max-width: 100%;
+            height: auto;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            transition: all 0.3s ease;
+        }
+        
+        .clickable-area {
+            position: absolute;
+            border: 2px solid rgba(255, 107, 107, 0.8);
+            background: rgba(255, 107, 107, 0.2);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+            color: #fff;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+        }
+        
+        .clickable-area:hover {
+            background: rgba(255, 107, 107, 0.4);
+            border-color: rgba(255, 107, 107, 1);
+            transform: scale(1.05);
+        }
+        
+        .clickable-area.mapped {
+            background: rgba(76, 175, 80, 0.3);
+            border-color: rgba(76, 175, 80, 0.8);
+        }
+        
+        .popup-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            backdrop-filter: blur(5px);
+        }
+        
+        .popup-content {
+            position: relative;
+            max-width: 90%;
+            max-height: 90%;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            animation: popupAppear 0.3s ease;
+        }
+        
+        @keyframes popupAppear {
+            from {
+                opacity: 0;
+                transform: scale(0.8);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+        
+        .popup-image {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+        
+        .close-btn {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: rgba(255, 255, 255, 0.9);
+            border: none;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            font-size: 20px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+        
+        .close-btn:hover {
+            background: rgba(255, 107, 107, 0.9);
+            color: white;
+            transform: rotate(90deg);
+        }
+        
+        .images-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .image-item {
+            border: 2px solid #dee2e6;
+            border-radius: 10px;
+            overflow: hidden;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+        
+        .image-item:hover {
+            border-color: #ff6b6b;
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+        }
+        
+        .image-item.selected {
+            border-color: #4ecdc4;
+            background: #e8f9f8;
+        }
+        
+        .image-item img {
+            width: 100%;
+            height: 120px;
+            object-fit: cover;
+        }
+        
+        .image-item .name {
+            padding: 8px;
+            text-align: center;
+            font-size: 12px;
+            background: #f8f9fa;
+            border-top: 1px solid #dee2e6;
+        }
+        
+        .areas-list {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        
+        .area-item {
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.3s ease;
+        }
+        
+        .area-item:hover {
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            transform: translateY(-2px);
+        }
+        
+        .area-info {
+            flex: 1;
+        }
+        
+        .area-actions {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .delete-btn, .map-btn {
+            border: none;
+            padding: 8px 12px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.3s ease;
+        }
+        
+        .delete-btn {
+            background: #dc3545;
+            color: white;
+        }
+        
+        .delete-btn:hover {
+            background: #c82333;
+        }
+        
+        .map-btn {
+            background: #28a745;
+            color: white;
+        }
+        
+        .map-btn:hover {
+            background: #218838;
+        }
+        
+        .play-mode {
+            text-align: center;
+            padding: 40px 20px;
+        }
+        
+        .play-controls {
+            margin-bottom: 30px;
+        }
+        
+        .status-message {
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            text-align: center;
+            font-weight: bold;
+        }
+        
+        .status-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status-warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        
+        .status-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .mapping-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1001;
+        }
+        
+        .modal-content {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            max-width: 800px;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        
+        .modal-header {
+            text-align: center;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #dee2e6;
+            padding-bottom: 15px;
+        }
+        
+        .save-load-controls {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        
+        .hidden-input {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🖼️ Advanced Interactive Image Viewer</h1>
+            <p>여러 이미지와 영역을 매핑하여 인터랙티브 뷰어를 만들어보세요</p>
+        </div>
+        
+        <div class="tabs">
+            <div class="tab active" onclick="switchTab('setup')">🛠️ 설정 모드</div>
+            <div class="tab" onclick="switchTab('play')">▶️ 플레이 모드</div>
+        </div>
+        
+        <!-- 설정 모드 탭 -->
+        <div class="tab-content active" id="setupTab">
+            <div class="controls">
+                <div class="file-input-group">
+                    <label for="mainImage">메인 이미지 선택:</label>
+                    <input type="file" id="mainImage" class="file-input" accept="image/*">
+                </div>
+                
+                <div class="file-input-group">
+                    <label for="popupImages">팝업 이미지들 선택 (여러 개 선택 가능):</label>
+                    <input type="file" id="popupImages" class="file-input" accept="image/*" multiple>
+                </div>
+                
+                <div class="save-load-controls">
+                    <button class="btn" onclick="toggleAreaSelection()">클릭 영역 설정 모드</button>
+                    <button class="btn danger" onclick="clearAllAreas()">모든 영역 제거</button>
+                    <button class="btn" onclick="resetImages()">이미지 초기화</button>
+                    <button class="btn success" onclick="saveConfiguration()">설정 저장</button>
+                    <button class="btn" onclick="document.getElementById('loadConfig').click()">설정 불러오기</button>
+                    <input type="file" id="loadConfig" class="hidden-input" accept=".json" onchange="loadConfiguration(event)">
+                </div>
+            </div>
+            
+            <div id="imagesSection" style="display: none;">
+                <h3>업로드된 이미지들:</h3>
+                <div class="images-grid" id="imagesGrid"></div>
+            </div>
+            
+            <div id="imageDisplay" style="text-align: center; padding: 20px;">
+                <p style="color: #6c757d; font-style: italic;">메인 이미지를 선택해주세요</p>
+            </div>
+            
+            <div class="areas-list" id="areasList" style="display: none;">
+                <h3>설정된 클릭 영역:</h3>
+                <div id="areasContainer"></div>
+            </div>
+        </div>
+        
+        <!-- 플레이 모드 탭 -->
+        <div class="tab-content" id="playTab">
+            <div class="play-mode">
+                <div class="play-controls">
+                    <button class="btn" onclick="switchTab('setup')">🛠️ 설정으로 돌아가기</button>
+                </div>
+                
+                <div id="playImageDisplay" style="text-align: center;">
+                    <p style="color: #6c757d; font-style: italic;">설정 모드에서 메인 이미지와 영역을 설정해주세요</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 팝업 오버레이 -->
+    <div class="popup-overlay" id="popupOverlay">
+        <div class="popup-content">
+            <button class="close-btn" onclick="closePopup()">&times;</button>
+            <img class="popup-image" id="popupImg" src="" alt="Popup Image">
+        </div>
+    </div>
+    
+    <!-- 매핑 모달 -->
+    <div class="mapping-modal" id="mappingModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>영역에 매핑할 이미지 선택</h3>
+                <p id="mappingAreaInfo"></p>
+            </div>
+            <div class="images-grid" id="mappingImagesGrid"></div>
+            <div style="text-align: center; margin-top: 20px;">
+                <button class="btn danger" onclick="closeMappingModal()">취소</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let mainImageElement = null;
+        let popupImages = [];
+        let isAreaSelectionMode = false;
+        let clickableAreas = [];
+        let areaCounter = 0;
+        let selectedImageForMapping = null;
+        let currentMappingAreaId = null;
+
+        document.getElementById('mainImage').addEventListener('change', loadMainImage);
+        document.getElementById('popupImages').addEventListener('change', loadPopupImages);
+
+        function switchTab(tabName) {
+            // 탭 버튼 업데이트
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelector(`[onclick="switchTab('${tabName}')"]`).classList.add('active');
+            
+            // 탭 컨텐츠 업데이트
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            document.getElementById(tabName + 'Tab').classList.add('active');
+            
+            if (tabName === 'play') {
+                setupPlayMode();
+            }
+        }
+
+        function loadMainImage(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    displayMainImage(e.target.result);
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function loadPopupImages(event) {
+            const files = Array.from(event.target.files);
+            popupImages = [];
+            
+            let loaded = 0;
+            files.forEach((file, index) => {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    popupImages.push({
+                        id: 'img_' + index,
+                        name: file.name,
+                        src: e.target.result
+                    });
+                    loaded++;
+                    if (loaded === files.length) {
+                        displayPopupImages();
+                    }
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function displayPopupImages() {
+            const grid = document.getElementById('imagesGrid');
+            const section = document.getElementById('imagesSection');
+            
+            if (popupImages.length > 0) {
+                section.style.display = 'block';
+                grid.innerHTML = popupImages.map(img => `
+                    <div class="image-item" data-img-id="${img.id}" onclick="selectImage('${img.id}')">
+                        <img src="${img.src}" alt="${img.name}">
+                        <div class="name">${img.name}</div>
+                    </div>
+                `).join('');
+            } else {
+                section.style.display = 'none';
+            }
+        }
+
+        function selectImage(imgId) {
+            document.querySelectorAll('.image-item').forEach(item => {
+                item.classList.remove('selected');
+            });
+            document.querySelector(`[data-img-id="${imgId}"]`).classList.add('selected');
+            selectedImageForMapping = imgId;
+        }
+
+        function displayMainImage(src) {
+            const imageDisplay = document.getElementById('imageDisplay');
+            imageDisplay.innerHTML = `
+                <div class="image-container" id="imageContainer">
+                    <img class="main-image" id="mainImg" src="${src}" alt="Main Image">
+                </div>
+            `;
+            
+            mainImageElement = document.getElementById('mainImg');
+            mainImageElement.onload = function() {
+                setupImageInteraction();
+                redrawAreas();
+            };
+        }
+
+        function setupImageInteraction() {
+            const container = document.getElementById('imageContainer');
+            
+            container.addEventListener('click', function(event) {
+                if (isAreaSelectionMode) {
+                    createClickableArea(event);
+                }
+            });
+        }
+
+        function createClickableArea(event) {
+            const container = document.getElementById('imageContainer');
+            const img = document.getElementById('mainImg');
+            const imgRect = img.getBoundingClientRect();
+            
+            const x = event.clientX - imgRect.left;
+            const y = event.clientY - imgRect.top;
+            
+            if (x < 0 || y < 0 || x > img.offsetWidth || y > img.offsetHeight) {
+                return;
+            }
+
+            const areaId = 'area_' + (++areaCounter);
+            
+            const areaData = {
+                id: areaId,
+                x: x,
+                y: y,
+                width: 60,
+                height: 60,
+                mappedImageId: null
+            };
+            
+            clickableAreas.push(areaData);
+            createAreaElement(areaData);
+            updateAreasList();
+            
+            showStatusMessage('새로운 영역이 생성되었습니다!', 'success');
+        }
+
+        function createAreaElement(areaData) {
+            const container = document.getElementById('imageContainer');
+            const area = document.createElement('div');
+            area.className = 'clickable-area' + (areaData.mappedImageId ? ' mapped' : '');
+            area.id = areaData.id;
+            area.style.left = areaData.x - areaData.width/2 + 'px';
+            area.style.top = areaData.y - areaData.height/2 + 'px';
+            area.style.width = areaData.width + 'px';
+            area.style.height = areaData.height + 'px';
+            area.textContent = areaData.id.split('_')[1];
+            
+            area.addEventListener('click', function(e) {
+                e.stopPropagation();
+                if (!isAreaSelectionMode) {
+                    showMappedImage(areaData.id);
+                }
+            });
+            
+            container.appendChild(area);
+        }
+
+        function redrawAreas() {
+            if (!mainImageElement) return;
+            
+            const container = document.getElementById('imageContainer');
+            const existingAreas = container.querySelectorAll('.clickable-area');
+            existingAreas.forEach(area => area.remove());
+            
+            clickableAreas.forEach(areaData => {
+                createAreaElement(areaData);
+            });
+        }
+
+        function showMappedImage(areaId) {
+            const area = clickableAreas.find(a => a.id === areaId);
+            if (area && area.mappedImageId) {
+                const image = popupImages.find(img => img.id === area.mappedImageId);
+                if (image) {
+                    document.getElementById('popupImg').src = image.src;
+                    document.getElementById('popupOverlay').style.display = 'flex';
+                }
+            } else {
+                showStatusMessage('이 영역에 매핑된 이미지가 없습니다.', 'warning');
+            }
+        }
+
+        function toggleAreaSelection() {
+            isAreaSelectionMode = !isAreaSelectionMode;
+            const btn = event.target;
+            
+            if (isAreaSelectionMode) {
+                btn.textContent = '영역 설정 완료';
+                btn.style.background = 'linear-gradient(45deg, #ff6b6b, #ee5a52)';
+                showStatusMessage('영역 설정 모드가 활성화되었습니다. 이미지를 클릭하여 영역을 추가하세요.', 'success');
+            } else {
+                btn.textContent = '클릭 영역 설정 모드';
+                btn.style.background = 'linear-gradient(45deg, #4ecdc4, #44a08d)';
+                showStatusMessage('영역 설정 모드가 비활성화되었습니다.', 'success');
+            }
+        }
+
+        function openMappingModal(areaId) {
+            if (popupImages.length === 0) {
+                showStatusMessage('먼저 팝업 이미지들을 업로드해주세요!', 'warning');
+                return;
+            }
+            
+            currentMappingAreaId = areaId;
+            const area = clickableAreas.find(a => a.id === areaId);
+            
+            document.getElementById('mappingAreaInfo').textContent = `영역 ${areaId.split('_')[1]}에 매핑할 이미지를 선택하세요`;
+            
+            const grid = document.getElementById('mappingImagesGrid');
+            grid.innerHTML = popupImages.map(img => `
+                <div class="image-item" data-img-id="${img.id}" onclick="mapImageToArea('${img.id}')">
+                    <img src="${img.src}" alt="${img.name}">
+                    <div class="name">${img.name}</div>
+                </div>
+            `).join('');
+            
+            document.getElementById('mappingModal').style.display = 'flex';
+        }
+
+        function mapImageToArea(imageId) {
+            const area = clickableAreas.find(a => a.id === currentMappingAreaId);
+            if (area) {
+                area.mappedImageId = imageId;
+                const areaElement = document.getElementById(currentMappingAreaId);
+                if (areaElement) {
+                    areaElement.classList.add('mapped');
+                }
+                updateAreasList();
+                closeMappingModal();
+                showStatusMessage('이미지가 영역에 매핑되었습니다!', 'success');
+            }
+        }
+
+        function closeMappingModal() {
+            document.getElementById('mappingModal').style.display = 'none';
+            currentMappingAreaId = null;
+        }
+
+        function updateAreasList() {
+            const container = document.getElementById('areasContainer');
+            const listDiv = document.getElementById('areasList');
+            
+            if (clickableAreas.length > 0) {
+                listDiv.style.display = 'block';
+                container.innerHTML = clickableAreas.map(area => {
+                    const mappedImage = area.mappedImageId ? popupImages.find(img => img.id === area.mappedImageId) : null;
+                    return `
+                        <div class="area-item">
+                            <div class="area-info">
+                                <strong>영역 ${area.id.split('_')[1]}</strong><br>
+                                위치: (${Math.round(area.x)}, ${Math.round(area.y)})<br>
+                                ${mappedImage ? `매핑된 이미지: ${mappedImage.name}` : '매핑된 이미지 없음'}
+                            </div>
+                            <div class="area-actions">
+                                <button class="map-btn" onclick="openMappingModal('${area.id}')">
+                                    ${area.mappedImageId ? '재매핑' : '매핑'}
+                                </button>
+                                <button class="delete-btn" onclick="deleteArea('${area.id}')">삭제</button>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            } else {
+                listDiv.style.display = 'none';
+            }
+        }
+
+        function deleteArea(areaId) {
+            const area = document.getElementById(areaId);
+            if (area) {
+                area.remove();
+            }
+            clickableAreas = clickableAreas.filter(a => a.id !== areaId);
+            updateAreasList();
+            showStatusMessage('영역이 삭제되었습니다.', 'success');
+        }
+
+        function clearAllAreas() {
+            const areas = document.querySelectorAll('.clickable-area');
+            areas.forEach(area => area.remove());
+            clickableAreas = [];
+            updateAreasList();
+            showStatusMessage('모든 클릭 영역이 제거되었습니다.', 'success');
+        }
+
+        function setupPlayMode() {
+            const playDisplay = document.getElementById('playImageDisplay');
+            
+            if (mainImageElement && clickableAreas.length > 0) {
+                const mainImgSrc = mainImageElement.src;
+                playDisplay.innerHTML = `
+                    <div class="image-container" id="playImageContainer">
+                        <img class="main-image" id="playMainImg" src="${mainImgSrc}" alt="Main Image">
+                    </div>
+                `;
+                
+                const playImg = document.getElementById('playMainImg');
+                playImg.onload = function() {
+                    setupPlayAreas();
+                };
+            } else {
+                playDisplay.innerHTML = '<p style="color: #6c757d; font-style: italic;">설정 모드에서 메인 이미지와 영역을 설정해주세요</p>';
+            }
+        }
+
+        function setupPlayAreas() {
+            const container = document.getElementById('playImageContainer');
+            
+            clickableAreas.forEach(areaData => {
+                if (areaData.mappedImageId) {
+                    const area = document.createElement('div');
+                    area.className = 'clickable-area mapped';
+                    area.style.left = areaData.x - areaData.width/2 + 'px';
+                    area.style.top = areaData.y - areaData.height/2 + 'px';
+                    area.style.width = areaData.width + 'px';
+                    area.style.height = areaData.height + 'px';
+                    area.textContent = areaData.id.split('_')[1];
+                    
+                    area.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        showMappedImage(areaData.id);
+                    });
+                    
+                    container.appendChild(area);
+                }
+            });
+        }
+
+        function saveConfiguration() {
+            if (!mainImageElement || clickableAreas.length === 0) {
+                showStatusMessage('저장할 설정이 없습니다. 메인 이미지와 영역을 설정해주세요.', 'warning');
+                return;
+            }
+            
+            const config = {
+                mainImage: mainImageElement.src,
+                popupImages: popupImages,
+                clickableAreas: clickableAreas,
+                version: '1.0',
+                timestamp: new Date().toISOString()
+            };
+            
+            const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `interactive-viewer-config-${new Date().toISOString().split('T')[0]}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            showStatusMessage('설정이 성공적으로 저장되었습니다!', 'success');
+        }
+
+        function loadConfiguration(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const config = JSON.parse(e.target.result);
+                    
+                    if (!config.version || !config.mainImage) {
+                        throw new Error('잘못된 설정 파일 형식입니다.');
+                    }
+                    
+                    // 메인 이미지 로드
+                    displayMainImage(config.mainImage);
+                    
+                    // 팝업 이미지들 로드
+                    popupImages = config.popupImages || [];
+                    displayPopupImages();
+                    
+                    // 클릭 영역들 로드
+                    clickableAreas = config.clickableAreas || [];
+                    areaCounter = Math.max(...clickableAreas.map(a => parseInt(a.id.split('_')[1])), 0);
+                    
+                    setTimeout(() => {
+                        redrawAreas();
+                        updateAreasList();
+                    }, 100);
+                    
+                    showStatusMessage('설정이 성공적으로 불러와졌습니다!', 'success');
+                    
+                } catch (error) {
+                    showStatusMessage('설정 파일을 불러오는데 실패했습니다: ' + error.message, 'error');
+                }
+            };
+            reader.readAsText(file);
+            
+            // 파일 입력 초기화
+            event.target.value = '';
+        }
+
+        function resetImages() {
+            document.getElementById('imageDisplay').innerHTML = '<p style="color: #6c757d; font-style: italic;">메인 이미지를 선택해주세요</p>';
+            document.getElementById('playImageDisplay').innerHTML = '<p style="color: #6c757d; font-style: italic;">설정 모드에서 메인 이미지와 영역을 설정해주세요</p>';
+            document.getElementById('mainImage').value = '';
+            document.getElementById('popupImages').value = '';
+            document.getElementById('imagesSection').style.display = 'none';
+            
+            mainImageElement = null;
+            popupImages = [];
+            clearAllAreas();
+            isAreaSelectionMode = false;
+            
+            // 버튼 상태 초기화
+            const areaBtn = document.querySelector('[onclick="toggleAreaSelection()"]');
+            if (areaBtn) {
+                areaBtn.textContent = '클릭 영역 설정 모드';
+                areaBtn.style.background = 'linear-gradient(45deg, #4ecdc4, #44a08d)';
+            }
+            
+            showStatusMessage('모든 설정이 초기화되었습니다.', 'success');
+        }
+
+        function showStatusMessage(message, type) {
+            // 기존 메시지 제거
+            const existingMsg = document.querySelector('.status-message');
+            if (existingMsg) {
+                existingMsg.remove();
+            }
+            
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `status-message status-${type}`;
+            messageDiv.textContent = message;
+            
+            // 현재 활성 탭의 첫 번째 요소 뒤에 삽입
+            const activeTab = document.querySelector('.tab-content.active');
+            const firstChild = activeTab.firstElementChild;
+            activeTab.insertBefore(messageDiv, firstChild.nextSibling);
+            
+            // 3초 후 자동 제거
+            setTimeout(() => {
+                if (messageDiv.parentNode) {
+                    messageDiv.remove();
+                }
+            }, 3000);
+        }
+
+        function closePopup() {
+            document.getElementById('popupOverlay').style.display = 'none';
+        }
+
+        // 팝업 오버레이 클릭시 닫기
+        document.getElementById('popupOverlay').addEventListener('click', function(event) {
+            if (event.target === this) {
+                closePopup();
+            }
+        });
+
+        // 매핑 모달 오버레이 클릭시 닫기
+        document.getElementById('mappingModal').addEventListener('click', function(event) {
+            if (event.target === this) {
+                closeMappingModal();
+            }
+        });
+
+        // ESC 키로 팝업/모달 닫기
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape') {
+                closePopup();
+                closeMappingModal();
+            }
+        });
+
+        // 페이지 로드시 초기화
+        window.addEventListener('load', function() {
+            showStatusMessage('Interactive Image Viewer에 오신 것을 환영합니다!', 'success');
+        });
+    </script>
+</body>
+</html>
